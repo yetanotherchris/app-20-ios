@@ -1,0 +1,10 @@
+{
+  "apiKey": "EXAMPLE_NOT_A_REAL_KEY",
+  "s3": {
+    "bucket": "weekend-chat-beta",
+    "region": "eu-west-1",
+    "accessKeyId": "AKIAEXAMPLEONLY",
+    "secretAccessKey": "EXAMPLE_NOT_A_REAL_SECRET",
+    "endpoint": "https://s3.eu-west-1.amazonaws.com"
+  }
+}

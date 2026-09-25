@@ -1,0 +1,49 @@
+{
+  "name": "app-20-ios",
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "ios": "expo start --ios --dev-client",
+    "build:ios": "npx eas-cli build --platform ios --profile development",
+    "build:ios:dev": "npx eas-cli build --platform ios --profile development",
+    "build:preview": "npx eas-cli build --platform ios --profile preview",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "maestro test tests/e2e"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1131.0",
+    "@expo/ui": "~57.0.19",
+    "app-20-llmchat": "1.0.83",
+    "expo": "~57.0.24",
+    "expo-constants": "~57.0.19",
+    "expo-dev-client": "~57.0.19",
+    "expo-document-picker": "~57.0.2",
+    "expo-file-system": "~57.0.7",
+    "expo-secure-store": "~57.0.4",
+    "react": "19.2.3",
+    "react-native": "^0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@testing-library/jest-dom": "^6.6.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "jsdom": "^26.0.0",
+    "prettier": "^3.4.0",
+    "react-dom": "19.2.3",
+    "react-native-web": "^0.21.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^5.0.0"
+  }
+}

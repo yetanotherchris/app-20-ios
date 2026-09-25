@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "app-20",
+    "slug": "app-20",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.app20.chat",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "56b2ee88-1f9f-4581-9577-39f66e3f5514"
+      }
+    },
+    "plugins": ["expo-document-picker", "expo-secure-store"]
+  }
+}
