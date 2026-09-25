@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# https://github.com/Helweg/open-codebase-index
+.opencode/index/
