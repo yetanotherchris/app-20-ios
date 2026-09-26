@@ -4,7 +4,7 @@ These four draft specifications share the branch `spec-121-124-settings-models-s
 
 | Spec                                                                                | Scope                                                                           |
 | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [121 YAML Settings](121-yaml-settings/spec.md)                                      | YAML settings serialization and import, with migration and legacy compatibility |
+| [121 TOML Settings](121-toml-settings/spec.md)                                      | TOML settings serialization and import, with migration and legacy compatibility |
 | [122 Searchable Model Settings](122-settings-model-catalog/spec.md)                 | Discover, search, enable, and select provider models                            |
 | [123 Configurable Provider Endpoint](123-provider-endpoint/spec.md)                 | Persist an API base URL, defaulting to OpenRouter                               |
 | [124 Startup and Response S3 Synchronisation](124-startup-response-s3-sync/spec.md) | Reconcile history at startup and upload completed responses                     |
@@ -18,7 +18,7 @@ The official Spec Kit 1.0.4 Codex integration is installed in `.agents/skills`, 
 Select one feature at a time for downstream commands. In the PowerShell environment used to launch Codex, set the feature directory explicitly:
 
 ```powershell
-$env:SPECIFY_FEATURE_DIRECTORY = 'specs/121-yaml-settings'
+$env:SPECIFY_FEATURE_DIRECTORY = 'specs/121-toml-settings'
 ```
 
 Change that value to the desired directory from the table. The shared branch name does not identify an individual feature. `.specify/feature.json`, when created by a skill, is a machine-local alternative and is ignored by Git.

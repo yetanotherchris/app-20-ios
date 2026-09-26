@@ -4,7 +4,7 @@
 **Created**: 2026-09-26
 **Status**: Draft
 **Input**: User description: "Add and toggle models in Settings using a searchable full list from an OpenAI-compatible /models endpoint, then show enabled models in the conversation dropdown."
-**Depends on**: [121 YAML Settings](../121-yaml-settings/spec.md), [123 Configurable Provider Endpoint](../123-provider-endpoint/spec.md)
+**Depends on**: [121 TOML Settings](../121-toml-settings/spec.md), [123 Configurable Provider Endpoint](../123-provider-endpoint/spec.md)
 
 ## Purpose
 
@@ -65,7 +65,7 @@ Let users search the configured provider's model catalog and enable models in Se
 - **FR-009**: Catalog failures MUST offer retry without clearing saved choices. Refresh MUST NOT automatically enable newly discovered models or remove saved identifiers that disappear from the catalog; absent identifiers MUST be marked as unlisted.
 - **FR-010**: Users MUST be able to add a nonempty exact model identifier manually, including when `/models` is unsupported. An unlisted identifier MAY be used, with provider rejection handled by the ordinary send-error flow; discovery MUST NOT claim every returned model supports chat.
 - **FR-011**: A request in progress MUST retain its captured model and endpoint even if settings change. New choices apply to subsequent requests.
-- **FR-012**: YAML settings MUST support `enabledModels` as a list of unique nonempty string identifiers for the document's endpoint, or the current endpoint when omitted. A supplied list replaces that endpoint's enabled list; `[]` explicitly disables all models. An empty supplied endpoint resolves to OpenRouter before assigning the list. Import validation and activation MUST obey spec 121's atomic commit guarantees with the other eligible settings.
+- **FR-012**: TOML settings MUST support `enabledModels` as a list of unique nonempty string identifiers for the document's endpoint, or the current endpoint when omitted. A supplied list replaces that endpoint's enabled list; `[]` explicitly disables all models. An empty supplied endpoint resolves to OpenRouter before assigning the list. Import validation and activation MUST obey spec 121's atomic commit guarantees with the other eligible settings.
 - **FR-013**: Conversations without selection provenance, including downloaded legacy JSON, MUST remain readable. A saved `openrouter/auto` identifier MUST be attributed to the default OpenRouter endpoint for legacy compatibility and restored only when that endpoint is active and that identifier is enabled. All other identifiers without provenance, including an empty identifier, MUST require explicit selection from the active endpoint's enabled models before sending. Explicit selection MUST persist the new provenance without changing existing messages. Switching endpoints MUST invalidate an incompatible live selection as well as one restored from disk.
 
 ### Key Entities

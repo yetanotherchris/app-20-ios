@@ -1,4 +1,4 @@
-# Specification Quality Checklist: YAML Settings
+# Specification Quality Checklist: TOML Settings
 
 **Purpose**: Validate specification completeness before planning
 **Created**: 2026-09-26
@@ -27,6 +27,6 @@
 
 ## Review Notes
 
-- YAML, provider API routes, and S3 format details are requested integration contracts or compatibility constraints, rather than implementation architecture.
+- TOML, provider API routes, and S3 format details are requested integration contracts or compatibility constraints, rather than implementation architecture.
 - This checklist records specification review, not implementation test results. Planning and application acceptance testing remain future work.
 - Review gaps resolved: incomplete S3 imports remain drafts; eligible imported groups activate atomically with failure and crash recovery. Acceptance scenarios distinguish draft completeness from invalid input and saved configuration.
