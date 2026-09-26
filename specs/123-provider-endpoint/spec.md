@@ -30,6 +30,7 @@ Allow the user to configure an OpenAI-compatible API base URL in Settings, defau
 1. **Given** a valid custom base URL, **When** it saves, **Then** subsequent chat and model requests use that URL with the appropriate route appended and retain its path prefix.
 2. **Given** an invalid draft URL, **When** the user edits it, **Then** a field error appears and the last valid saved destination remains active.
 3. **Given** a custom endpoint, **When** the user resets it to default or imports `endpoint: ""`, **Then** subsequent requests use OpenRouter.
+4. **Given** an import replacing the endpoint and API key together, **When** saving fails between writes or the app terminates before commit, **Then** subsequent requests and relaunch retain the previous endpoint/key pair until a complete replacement commits.
 
 ### Edge Cases
 
@@ -51,6 +52,7 @@ Allow the user to configure an OpenAI-compatible API base URL in Settings, defau
 - **FR-008**: YAML settings MUST support optional top-level string `endpoint`. Import MUST validate it together with all other supplied fields; omission preserves the current endpoint and `""` resets it. Nested `s3.endpoint` continues to configure S3 only.
 - **FR-009**: The configured provider MUST support the existing OpenAI-compatible streaming Chat Completions contract. Unsupported protocols or provider errors MUST use the ordinary actionable error flow without automatic fallback to a different destination.
 - **FR-010**: Changing the URL MUST NOT erase conversations or credentials. Settings help MUST make clear that the saved API key is used for the configured destination. Authentication credentials MUST NOT be forwarded to a different origin through redirects.
+- **FR-011**: Endpoint, API key, and enabled-model changes supplied by one import MUST activate together under spec 121's commit and recovery guarantees. A manual endpoint change uses the saved API key as described in FR-010 and MUST activate the enabled list scoped to the new normalized endpoint at the same time; a failed save MUST retain the previous endpoint and its enabled list.
 
 ### Key Entities
 

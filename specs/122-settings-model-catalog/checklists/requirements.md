@@ -29,3 +29,4 @@
 
 - YAML, provider API routes, and S3 format details are requested integration contracts or compatibility constraints, rather than implementation architecture.
 - This checklist records specification review, not implementation test results. Planning and application acceptance testing remain future work.
+- Review gaps resolved: conversation selections include endpoint provenance, legacy and S3-imported selections have explicit fallback rules, and fresh-install/new-conversation defaults are defined. Matching model identifiers across providers cannot silently transfer selections.

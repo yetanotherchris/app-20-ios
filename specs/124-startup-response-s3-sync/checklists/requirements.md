@@ -29,3 +29,4 @@
 
 - YAML, provider API routes, and S3 format details are requested integration contracts or compatibility constraints, rather than implementation architecture.
 - This checklist records specification review, not implementation test results. Planning and application acceptance testing remain future work.
+- Review gaps resolved: durable conflict holds and explicit resolution govern queued writes and manifest updates; active-work downloads defer with a convergence rule. Malformed-object preservation, timestamp validation, and destination-switch history transfer are explicit and covered by acceptance scenarios.

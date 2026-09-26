@@ -31,6 +31,9 @@ Let users search the configured provider's model catalog and enable models in Se
 1. **Given** an enabled model selected in chat, **When** a prompt is sent, **Then** the request uses its exact identifier and the conversation saves that selection.
 2. **Given** an existing conversation, **When** it reopens, **Then** its model selection is restored if still enabled for the current endpoint.
 3. **Given** the selected model was disabled or belongs to another endpoint, **When** the conversation opens, **Then** history remains readable and a valid selection is required before sending, without silently changing the model.
+4. **Given** providers A and B both enable the same model identifier, **When** a conversation selected under A opens while B is active, **Then** sending requires explicit selection under B; matching identifiers alone do not restore the selection.
+5. **Given** a legacy or S3-downloaded conversation without provider provenance, **When** it opens, **Then** a legacy `openrouter/auto` selection restores only under the default OpenRouter endpoint with that model enabled; every other selection requires explicit confirmation through the dropdown.
+6. **Given** a fresh install using OpenRouter, **When** the first conversation opens, **Then** `openrouter/auto` is enabled and selected; **Given** another endpoint or a saved enabled list, **When** a new conversation opens, **Then** the sole enabled model is selected if there is exactly one, otherwise an explicit selection is required before sending.
 
 ### User Story 3 - Recover from catalog failure (Priority: P2)
 
@@ -56,19 +59,20 @@ Let users search the configured provider's model catalog and enable models in Se
 - **FR-003**: Search MUST match display name and identifier case-insensitively. Rows MUST expose their identifier and an accessible enable/disable control. Loading, empty catalog, no search results, and error states MUST be distinct.
 - **FR-004**: Enabling or disabling a model MUST follow existing settings autosave and retry behavior, persist across relaunch, and update the chat dropdown after successful saving. Duplicate choices MUST NOT appear.
 - **FR-005**: Saved model identifiers and cached catalog data MUST be scoped to the normalized provider base URL. Switching endpoints MUST restore that endpoint's choices without carrying another endpoint's models into its dropdown.
-- **FR-006**: The chat dropdown MUST contain only enabled models for the current endpoint. Selecting a model MUST set the actual request `model` value and persist the conversation selection; a display label MUST NOT substitute for the identifier.
+- **FR-006**: The chat dropdown MUST contain only enabled models for the current endpoint. Selecting a model MUST set the actual request `model` value and persist both its identifier and normalized provider base URL as the conversation's selection provenance; a display label MUST NOT substitute for the identifier. Restoration MUST require both the saved endpoint to match the active endpoint and the identifier to remain enabled. Matching identifiers at different endpoints MUST NOT make a selection transferable. Provenance MUST contain no credentials and MUST survive JSON serialization and S3 transfer as backward-compatible optional conversation data.
 - **FR-007**: With no enabled model, the dropdown MUST explain how to add models in Settings and sending MUST be unavailable. Disabling the selected model MUST require a new selection before the next send; existing transcript messages MUST remain unchanged.
-- **FR-008**: Existing users on the default OpenRouter endpoint MUST start with `openrouter/auto` enabled and selected. This fallback MUST NOT be automatically enabled for other endpoints or restored after the user explicitly disables it.
+- **FR-008**: Fresh installs and upgrades with no saved model preferences for the default OpenRouter endpoint MUST initialize that endpoint with `openrouter/auto` enabled. This fallback MUST NOT be automatically enabled for other endpoints or restored after the user explicitly disables it, including an explicitly saved empty list. A new conversation MUST select the sole enabled model when exactly one exists; with zero or multiple enabled models it MUST require explicit selection before sending. Existing conversations MUST follow the restoration and legacy rules rather than receive a new-conversation default.
 - **FR-009**: Catalog failures MUST offer retry without clearing saved choices. Refresh MUST NOT automatically enable newly discovered models or remove saved identifiers that disappear from the catalog; absent identifiers MUST be marked as unlisted.
 - **FR-010**: Users MUST be able to add a nonempty exact model identifier manually, including when `/models` is unsupported. An unlisted identifier MAY be used, with provider rejection handled by the ordinary send-error flow; discovery MUST NOT claim every returned model supports chat.
 - **FR-011**: A request in progress MUST retain its captured model and endpoint even if settings change. New choices apply to subsequent requests.
-- **FR-012**: YAML settings MUST support `enabledModels` as a list of unique nonempty string identifiers for the document's endpoint, or the current endpoint when omitted. A supplied list replaces that endpoint's enabled list; `[]` explicitly disables all models. Import validation MUST be atomic with the other supplied settings.
+- **FR-012**: YAML settings MUST support `enabledModels` as a list of unique nonempty string identifiers for the document's endpoint, or the current endpoint when omitted. A supplied list replaces that endpoint's enabled list; `[]` explicitly disables all models. An empty supplied endpoint resolves to OpenRouter before assigning the list. Import validation and activation MUST obey spec 121's atomic commit guarantees with the other eligible settings.
+- **FR-013**: Conversations without selection provenance, including downloaded legacy JSON, MUST remain readable. A saved `openrouter/auto` identifier MUST be attributed to the default OpenRouter endpoint for legacy compatibility and restored only when that endpoint is active and that identifier is enabled. All other identifiers without provenance, including an empty identifier, MUST require explicit selection from the active endpoint's enabled models before sending. Explicit selection MUST persist the new provenance without changing existing messages. Switching endpoints MUST invalidate an incompatible live selection as well as one restored from disk.
 
 ### Key Entities
 
 - **Catalog model**: Provider identifier and optional display metadata.
 - **Enabled model selection**: Endpoint-scoped saved list of identifiers.
-- **Conversation model**: Identifier selected for subsequent prompts in that conversation.
+- **Conversation model**: Identifier and normalized provider base URL selected for subsequent prompts in that conversation; legacy files may lack the URL.
 
 ## Success Criteria
 
@@ -76,6 +80,7 @@ Let users search the configured provider's model catalog and enable models in Se
 - **SC-002**: Enabled choices survive closing Settings and relaunching and match the dropdown contents.
 - **SC-003**: Each send uses the exact selected identifier; no path remains hard-coded to `openrouter/auto`.
 - **SC-004**: Catalog failure preserves saved choices and permits manual entry and retry.
+- **SC-005**: Identical model identifiers at different endpoints never silently restore an incompatible conversation selection, and legacy conversations remain readable with defined selection behavior.
 
 ## Assumptions & References
 

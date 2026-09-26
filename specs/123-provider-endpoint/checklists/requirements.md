@@ -29,3 +29,4 @@
 
 - YAML, provider API routes, and S3 format details are requested integration contracts or compatibility constraints, rather than implementation architecture.
 - This checklist records specification review, not implementation test results. Planning and application acceptance testing remain future work.
+- Review gaps resolved: endpoint/key/model imports follow the shared atomic activation contract; manual endpoint saves activate the destination-scoped enabled list coherently. Failure and termination scenarios preserve the previous provider pair.
