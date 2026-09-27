@@ -1,6 +1,6 @@
 # Active feature specifications
 
-The active specifications below describe remaining work. [121 TOML Settings](archive/121-toml-settings/spec.md) and [124 Startup and Response S3 Synchronisation](archive/124-startup-response-s3-sync/spec.md) are implemented and archived, with independent review records for [121](archive/121-toml-settings/review.md) and [124](archive/124-startup-response-s3-sync/review.md). Feature 124 passed automated npm S3 validation; its iOS device acceptance remains unverified.
+The active specifications below describe remaining work. [121 TOML Settings](archive/121-toml-settings/spec.md) and [124 Startup and Response S3 Synchronisation](archive/124-startup-response-s3-sync/spec.md) are implemented and archived. Feature 124's independent reviews and finding dispositions are posted directly on [PR #3](https://github.com/yetanotherchris/app-20-ios/pull/3). Feature 124 passed automated npm S3 validation; its iOS device acceptance remains unverified.
 
 | Spec                                                                | Scope                                                |
 | ------------------------------------------------------------------- | ---------------------------------------------------- |

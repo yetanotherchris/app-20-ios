@@ -2,7 +2,7 @@
 
 ## Setup and foundations
 
-- [x] T001 Complete independent spec/plan/tasks consistency review and resolve gaps in specs/archive/124-startup-response-s3-sync/review.md.
+- [x] T001 Complete independent spec/plan/tasks consistency review and resolve gaps in the PR #3 discussion.
 - [x] T002 Install npm s3rver test server and SHA-256 dependency in package.json and package-lock.json; verify ignore rules in .prettierignore.
 - [x] T003 Implement strict precision-preserving timestamps and semantic comparisons in src/sync/revision.ts; tighten src/storage/constants.ts safe filenames and preserve optional provenance in src/storage/schema.ts.
 - [x] T004 Implement atomic destination-bound queue/holds/deferrals/recovery persistence in src/sync/reconciliationFile.ts and coordinator interfaces in src/sync/reconciliation.ts.
@@ -35,11 +35,11 @@ Independent test: offline recovery, relaunch, deletes, held manifests, explicit 
 
 ## Review, validation and archive
 
-- [x] T016 Run automated tests/typecheck/lint and record results and device acceptance limits in specs/archive/124-startup-response-s3-sync/review.md.
-- [x] T017 Run independent read-only code correctness/regression review of final scoped diff and record findings in specs/archive/124-startup-response-s3-sync/review.md.
-- [x] T018 Run independent read-only requirements/acceptance review of actual implementation against spec in specs/archive/124-startup-response-s3-sync/review.md.
-- [x] T019 Run independent read-only security/privacy review of persistence/credentials/external data in specs/archive/124-startup-response-s3-sync/review.md.
-- [x] T020 Remediate all applicable findings, add regressions, rerun affected checks and obtain reviewer verification in specs/archive/124-startup-response-s3-sync/review.md.
+- [x] T016 Run automated tests/typecheck/lint and record results and device acceptance limits in the PR #3 discussion.
+- [x] T017 Run independent read-only code correctness/regression review of final scoped diff and record findings in the PR #3 discussion.
+- [x] T018 Run independent read-only requirements/acceptance review of actual implementation against spec in the PR #3 discussion.
+- [x] T019 Run independent read-only security/privacy review of persistence/credentials/external data in the PR #3 discussion.
+- [x] T020 Remediate all applicable findings, add regressions, rerun affected checks and obtain reviewer verification in the PR #3 discussion.
 - [x] T021 Archive completed feature to specs/archive/124-startup-response-s3-sync/, mark spec Archived and repair artifact/dependency links and selected .specify/feature.json context.
 
 ## Dependencies and execution
@@ -48,13 +48,19 @@ T001 gates coding. T002–T004 precede US1, US1 precedes US2, US3 completes shar
 
 ## Published PR remediation
 
-- [x] T022 Run fresh independent correctness, requirements and security reviews against published PR head and archived spec; record findings in review.md.
+- [x] T022 Run fresh independent correctness, requirements and security reviews against published PR head and archived spec; record findings in the PR #3 discussion.
 - [x] T023 Fix completed-history saves, active-work replacement races, partial-import metadata, deletion retry and concurrent S3 writes; add regression tests in tests/chat and tests/sync.
-- [x] T024 Obtain independent verification of final fixes and complete automated checks; record reviewed diff and limitations in review.md.
+- [x] T024 Obtain independent verification of final fixes and complete automated checks; record reviewed diff and limitations in the PR #3 discussion.
 - [x] T025 Commit and push reviewed remediation to the existing authorized PR #3 and update its validation description.
 
 ## Continuation of PR review gate
 
 - [x] T026 Add native Maestro sync scenario flows and explicit fixture/backend verification instructions in tests/e2e/sync; record unavailable device acceptance.
-- [x] T027 Complete all five independent final-diff reviews, remediate findings and obtain verification; update review.md.
+- [x] T027 Complete all five independent final-diff reviews, remediate findings and obtain verification; post complete reports and dispositions directly on PR #3.
 - [x] T028 Publish review reports and disposition replies to PR #3, update its description and inspect GitHub checks.
+
+## PR comment review workflow correction
+
+- [x] T029 Remove repository review files introduced by this PR and repair guidance, skill instructions and feature references so complete reports live in PR comments.
+- [x] T030 Complete one independent artifact-compliance review of this documentation-only correction, resolve findings and post its report and disposition on PR #3.
+- [x] T031 Update existing PR comments and description to remove deleted-file links, preserve prior review/validation details in the discussion, and verify stored content and GitHub checks.

@@ -143,7 +143,7 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 ## Repository final-phase tasks
 
-Include explicit tasks for the independent implementation reviews, remediation and reviewer verification, validation/review record, and archiving/link repair required by root `AGENTS.md`. These tasks belong after implementation and before PR readiness; they must not be treated as optional polish.
+Include explicit tasks for archiving/link repair, authorized PR publication, all five independent implementation reviews, full reports posted directly as PR comments, remediation and reviewer verification, disposition replies and validation required by root `AGENTS.md`. Review tasks follow PR publication and precede readiness; they must not be treated as optional polish. Do not generate tasks to create a feature review.md or repository review record.
 
 ## Task Generation Rules
 
