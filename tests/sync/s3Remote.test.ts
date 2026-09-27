@@ -45,3 +45,19 @@ it('only treats missing objects as absence, not permissions or missing body', as
   await expect(createS3Remote(config, client).readRevision!('a.json')).rejects.toThrow('body')
   client.destroy()
 })
+
+it('uses ETag conditional writes and missing-object create conditions', async () => {
+  const client = new S3Client({ region: config.region })
+  const send = spy(client)
+  send.mockResolvedValue({})
+  const remote = createS3Remote(config, client)
+  await remote.writeRevision!('a.json', '{}', { text: '{}', etag: '"observed"' })
+  expect(send.mock.calls[0]?.[0].input).toMatchObject({ IfMatch: '"observed"' })
+  await remote.writeRevision!('b.json', '{}', { text: null })
+  expect(send.mock.calls[1]?.[0].input).toMatchObject({ IfNoneMatch: '*' })
+  send.mockRejectedValueOnce({ $metadata: { httpStatusCode: 412 } })
+  await expect(remote.writeRevision!('a.json', '{}', { text: '{}', etag: '"observed"' })).rejects.toThrow(
+    'S3 revision changed',
+  )
+  client.destroy()
+})

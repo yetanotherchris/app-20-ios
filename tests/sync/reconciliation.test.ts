@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { serializeConversation, type Conversation } from '../../src/storage'
+import { createConversationStore, serializeConversation, type Conversation } from '../../src/storage'
 import { createInMemoryConversationPort } from '../../src/storage/testing'
 import { createInMemorySyncRemote } from '../../src/sync/testing'
 import { ReconciliationCoordinator, type ReconciliationState } from '../../src/sync/reconciliation'
@@ -357,4 +357,182 @@ it('skips URI aliases/traversal before any local access', async () => {
   expect(f.local.files.size).toBe(1)
   expect(f.local.files.has('manifest.json')).toBe(true)
   expect(f.sync.report().skipped).toBe(4)
+})
+
+it.each(['persistence', 'file-write'])(
+  'defers work that begins during download %s without replacing live edits',
+  async (stage) => {
+    const f = fixture({ 'a.json': raw() }, { 'a.json': raw('remote', '2026-02-01T00:00:00Z') })
+    let once = false
+    if (stage === 'persistence') {
+      const persist = f.storage.write
+      f.storage.write = async (state) => {
+        if (!once && state.deferred.length > 0) {
+          once = true
+          f.busy(true)
+        }
+        await persist(state)
+      }
+    } else {
+      const write = f.local.writeText
+      f.local.writeText = async (name, value) => {
+        await write(name, value)
+        if (!once && name === 'a.json' && value.includes('remote')) {
+          once = true
+          f.busy(true)
+        }
+      }
+    }
+    await f.sync.run()
+    expect(f.applied).not.toHaveBeenCalled()
+    expect(f.local.files.get('a.json')).toBe(raw())
+    expect(f.state().deferred).toHaveLength(1)
+    f.local.files.set('a.json', raw('new local edit', '2026-03-01T00:00:00Z'))
+    f.busy(false)
+    await f.sync.run()
+    expect(f.sync.holds()[0]?.kind).toBe('conflict')
+  },
+)
+it.each(['persistence', 'file-write'])('keeps a resolution held when new work starts during %s', async (stage) => {
+  const f = fixture({ 'a.json': raw() }, { 'a.json': raw('remote') })
+  await f.sync.run()
+  const presented = f.sync.holds()[0]!
+  let once = false
+  if (stage === 'persistence') {
+    const persist = f.storage.write
+    f.storage.write = async (state) => {
+      if (!once) {
+        once = true
+        f.busy(true)
+      }
+      await persist(state)
+    }
+  } else {
+    const write = f.local.writeText
+    f.local.writeText = async (name, value) => {
+      await write(name, value)
+      if (!once && name === 'a.json') {
+        once = true
+        f.busy(true)
+      }
+    }
+  }
+  expect(await f.sync.resolve('a.json', 'remote', presented)).toBe('busy')
+  expect(f.local.files.get('a.json')).toBe(raw())
+  expect(f.applied).not.toHaveBeenCalled()
+  expect(f.sync.holds()).toHaveLength(1)
+})
+it('refreshes each successful import before a subsequent remote read fails', async () => {
+  const f = fixture({}, { 'a.json': raw('imported'), 'b.json': raw('failed') })
+  const read = f.remote.readText
+  f.remote.readText = async (name) => {
+    if (name === 'b.json') throw new Error('offline')
+    return read(name)
+  }
+  await f.sync.run()
+  expect(f.sync.state()).toBe('error')
+  expect(f.history).toHaveBeenCalled()
+  expect(f.local.files.get('a.json')).toBe(raw('imported'))
+})
+it('refreshes imports even when outbound manifest permission is denied', async () => {
+  const f = fixture({}, { 'a.json': raw('imported') })
+  f.remote.writeText = async () => {
+    throw new Error('denied')
+  }
+  await f.sync.run()
+  expect(f.sync.state()).toBe('error')
+  expect(f.history).toHaveBeenCalled()
+  expect(f.local.files.get('a.json')).toBe(raw('imported'))
+})
+it('prunes deleted manifest metadata on relaunch after deletion succeeded but manifest failed', async () => {
+  const f = fixture({ 'a.json': raw() }, { 'a.json': raw() })
+  await f.sync.run()
+  const write = f.remote.writeText
+  f.remote.writeText = async (name, value) => {
+    if (name === 'manifest.json') throw new Error('offline')
+    await write(name, value)
+  }
+  await f.sync.deleteLocally('a.json', async () => {
+    f.local.files.delete('a.json')
+  })
+  await f.sync.run()
+  expect(f.remote.objects.has('a.json')).toBe(false)
+  expect(f.sync.state()).toBe('error')
+  f.remote.writeText = write
+  await f.create().run()
+  expect(JSON.parse(f.remote.objects.get('manifest.json')!).conversations).toEqual([])
+})
+it('never overwrites a newer remote revision arriving between GET and conditional PUT', async () => {
+  const f = fixture(
+    { 'a.json': raw('local', '2026-02-01T00:00:00Z') },
+    { 'a.json': raw('old', '2026-01-01T00:00:00Z') },
+  )
+  const conditional = f.remote.writeRevision!.bind(f.remote)
+  let once = false
+  f.remote.writeRevision = async (name, value, expected) => {
+    if (!once && name === 'a.json') {
+      once = true
+      f.remote.objects.set(name, raw('new concurrent', '2026-03-01T00:00:00Z'))
+    }
+    await conditional(name, value, expected)
+  }
+  await f.sync.run()
+  expect(f.remote.objects.get('a.json')).toContain('new concurrent')
+  expect(f.local.files.get('a.json')).toContain('new concurrent')
+  expect(f.state().recovery.some((r) => r.text?.includes('"local"'))).toBe(true)
+})
+it('requires a fresh repair choice if the remote changes during its conditional replacement', async () => {
+  const f = fixture({ 'a.json': raw() }, { 'a.json': 'malformed' })
+  await f.sync.run()
+  const conditional = f.remote.writeRevision!.bind(f.remote)
+  let once = false
+  f.remote.writeRevision = async (name, value, expected) => {
+    if (!once && name === 'a.json') {
+      once = true
+      f.remote.objects.set(name, raw('other client'))
+    }
+    await conditional(name, value, expected)
+  }
+  await f.sync.resolve('a.json', 'local', f.sync.holds()[0]!)
+  expect(f.remote.objects.get('a.json')).toBe(raw('other client'))
+  expect(f.sync.holds()[0]?.kind).toBe('conflict')
+})
+
+it('refreshes existing history metadata before a subsequent remote read fails', async () => {
+  const f = fixture(
+    { 'a.json': raw('old title') },
+    { 'a.json': raw('new title', '2026-02-01T00:00:00Z'), 'b.json': raw() },
+  )
+  const store = createConversationStore(f.local)
+  await store.list()
+  let visibleTitle = ''
+  f.history.mockImplementation(async () => {
+    visibleTitle = (await store.list()).entries[0]!.title
+  })
+  const read = f.remote.readText
+  f.remote.readText = async (name) => {
+    if (name === 'b.json') throw new Error('offline')
+    return read(name)
+  }
+  await f.sync.run()
+  expect(f.sync.state()).toBe('error')
+  expect(visibleTitle).toBe('new title')
+})
+it('recovers an applied download after its deferred cleanup persistence fails', async () => {
+  const f = fixture({ 'a.json': raw() }, { 'a.json': raw('remote', '2026-02-01T00:00:00Z') })
+  const write = f.storage.write
+  let once = false
+  f.storage.write = async (value) => {
+    if (!once && f.local.files.get('a.json')?.includes('"remote"') && value.deferred.length === 0) {
+      once = true
+      throw new Error('disk unavailable')
+    }
+    await write(value)
+  }
+  await f.sync.run()
+  expect(f.sync.state()).toBe('error')
+  await f.create().run()
+  expect(f.state().holds).toHaveLength(0)
+  expect(f.state().deferred).toHaveLength(0)
+  expect(f.local.files.get('a.json')).toContain('"remote"')
 })

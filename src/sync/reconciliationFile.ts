@@ -12,6 +12,7 @@ function remote(value: unknown): boolean {
   return (
     record(value) &&
     text(value.text) &&
+    (value.etag === undefined || typeof value.etag === 'string') &&
     (value.bytes === undefined ||
       (Array.isArray(value.bytes) && value.bytes.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)))
   )

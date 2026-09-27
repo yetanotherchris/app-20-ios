@@ -67,15 +67,15 @@ it('reconciles startup, completed revisions, manifest, durable retry and delete 
     expect(await remote.readText('a.json')).toContain(title)
     expect(JSON.parse(await remote.readText('manifest.json')).conversations[0].title).toBe(title)
   }
-  const write = remote.writeText
-  remote.writeText = async () => {
+  const write = remote.writeRevision
+  remote.writeRevision = async () => {
     throw new Error('test outage')
   }
   local.files.set('a.json', raw('offline-completion', '2026-01-05T00:00:00.000Z'))
   await sync.schedule({ name: 'a.json', revision: 3, content: local.files.get('a.json')! })
   await sync.run()
   expect(sync.state()).toBe('error')
-  remote.writeText = write
+  remote.writeRevision = write
   await create().run()
   expect(await remote.readText('a.json')).toContain('offline-completion')
   await sync.deleteLocally('a.json', async () => {

@@ -104,6 +104,8 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   const messagesRef = useRef<readonly Message[]>([])
   const draftRef = useRef('')
   const localSavingRef = useRef(false)
+  const workVersionRef = useRef(0)
+  const successfulResponsesRef = useRef(new Set<string>())
   const chatStatusRef = useRef('idle')
   const applyRemoteRef = useRef<(conversation: Conversation) => void>(() => undefined)
   const parkedDraftRef = useRef<string | null>(null)
@@ -156,6 +158,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
         }
       },
       {
+        workVersion: () => workVersionRef.current,
         isActive: (_name, conversation) => {
           if (!conversation) return localSavingRef.current
           if (conversation.id === conversationIdRef.current)
@@ -195,6 +198,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   }
 
   function setEditSource(id: string | null): void {
+    workVersionRef.current += 1
     editSourceRef.current = id
     setEditSourceId(id)
   }
@@ -230,7 +234,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
           {
             id: conversationIdRef.current,
             createdAt: createdAtRef.current,
-            model: AUTOMATIC_MODEL,
+            model: baseRef.current?.model ?? AUTOMATIC_MODEL,
             messages: messagesRef.current,
             draft: draftRef.current,
           },
@@ -238,11 +242,25 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
         ),
       saveSnapshot: async (conversation) => {
         if (!conversation.messages.some((message) => message.role === 'user')) return
+        workVersionRef.current += 1
         localSavingRef.current = true
         let fileName = ''
         try {
           await sync.localMutation(async () => {
             const previous = baseRef.current?.id === conversation.id ? baseRef.current : null
+            if (conversation.id === conversationIdRef.current) {
+              // Capture live data after acquiring the local lock, not a displaced pre-lock snapshot.
+              conversation = toConversation(
+                {
+                  id: conversationIdRef.current,
+                  createdAt: createdAtRef.current,
+                  model: previous?.model ?? AUTOMATIC_MODEL,
+                  messages: messagesRef.current,
+                  draft: draftRef.current,
+                },
+                previous,
+              )
+            }
             const unchanged = previous && equivalent(JSON.stringify(previous), JSON.stringify(conversation), true)
             conversation = {
               ...conversation,
@@ -267,6 +285,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
 
   const chat = useChatSession({
     request: (operation: ChatOperation, controls: ChatSessionControls) => {
+      workVersionRef.current += 1
       const controller = new AbortController()
       const requestGeneration = sessionGenerationRef.current
       controllerRef.current = controller
@@ -276,12 +295,17 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       const provider = createOpenRouterProvider({
         apiKey: () => secretsRef.current.getProviderKey(),
       })
+      let succeeded = false
       void (async () => {
         try {
           for await (const chunk of provider.streamChat({ model: AUTOMATIC_MODEL, messages }, controller.signal)) {
             controls.appendChunk(chunk)
           }
-          if (!controller.signal.aborted) controls.complete()
+          if (!controller.signal.aborted) {
+            successfulResponsesRef.current.add(operation.messageId)
+            succeeded = true
+            controls.complete()
+          }
         } catch {
           if (!controller.signal.aborted) {
             controls.fail()
@@ -291,15 +315,17 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
           if (requestGeneration === sessionGenerationRef.current) {
             controllerRef.current = null
             controlsRef.current = null
-            setTimeout(() => {
-              if (requestGeneration === sessionGenerationRef.current) autosave.trigger()
-            }, 0)
+            if (!succeeded)
+              setTimeout(() => {
+                if (requestGeneration === sessionGenerationRef.current) autosave.trigger()
+              }, 0)
           }
         }
       })()
     },
   })
   chatStatusRef.current = chat.status
+  if (messagesRef.current !== chat.messages) workVersionRef.current += 1
   messagesRef.current = chat.messages
   applyRemoteRef.current = (conversation) => {
     baseRef.current = conversation
@@ -318,9 +344,11 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       chat.status !== 'idle' ||
       response?.role !== 'assistant' ||
       response.status !== 'complete' ||
+      !successfulResponsesRef.current.has(response.id) ||
       completedResponseRef.current.has(response.id)
     )
       return
+    successfulResponsesRef.current.delete(response.id)
     completedResponseRef.current.add(response.id)
     // One terminal completion trigger, including edit-and-resend; chunks cannot enter this branch.
     autosave.trigger()
@@ -379,6 +407,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
 
   const setDraft = useCallback(
     (value: string): void => {
+      workVersionRef.current += 1
       draftRef.current = value
       setDraftState(value)
       rememberConversationUiState()

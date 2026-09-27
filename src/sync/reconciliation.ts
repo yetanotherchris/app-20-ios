@@ -14,10 +14,11 @@ import {
 import type { S3Config } from '../secrets/secretService'
 import type { MirrorOperation, MirrorQueueState } from './mirrorQueue'
 import type { SyncRemote, SyncReport } from './types'
-import { RemoteMissingError } from './errors'
+import { RemoteMissingError, RemotePreconditionError } from './errors'
 import { compareInstants, equivalent, freshTimestamp, instant, revision } from './revision'
 
 export interface RemoteRevision {
+  etag?: string
   text: string | null
   bytes?: number[]
 }
@@ -63,6 +64,7 @@ export interface ReconciliationOptions {
   remote(config: S3Config): SyncRemote
   legacyOperations?(): Promise<MirrorOperation[]>
   isActive?(name: string, conversation: Conversation | null): boolean
+  workVersion?(): number
   onApplied?(name: string, conversation: Conversation): void
   onHistory?(): Promise<void> | void
   onState?(state: MirrorQueueState, phase: 'history' | 'upload'): void
@@ -353,10 +355,12 @@ export class ReconciliationCoordinator {
       this.phase = 'history'
       let baseline: string | null = null
       let wasActive = false
+      let observedWork = 0
       await this.localMutation(async () => {
         this.check(epoch)
         baseline = await this.localRead(name)
         wasActive = this.active(name, baseline)
+        observedWork = this.options.workVersion?.() ?? 0
       })
       const candidate = await this.remoteRead(remote, name, epoch)
       let upload: string | null | undefined
@@ -416,7 +420,7 @@ export class ReconciliationCoordinator {
           return
         }
         const deferred = this.data.deferred.find((item) => item.name === name)
-        if (deferred && !equivalent(deferred.baseline, fresh)) {
+        if (deferred && !equivalent(deferred.baseline, fresh) && !equivalent(fresh, candidate.text)) {
           await this.hold(name, 'conflict', candidate, fresh, epoch)
           report.skipped += 1
           return
@@ -436,13 +440,31 @@ export class ReconciliationCoordinator {
           }
           this.recover(name, { text: fresh })
           this.data.deferred = this.data.deferred.filter((item) => item.name !== name)
-          // Recovery/deferral protection is committed before changing the canonical file.
+          this.data.deferred.push({ name, baseline: deferred?.baseline ?? fresh, remote: candidate })
           await this.persist(epoch)
+          const workChanged = () => this.active(name, fresh) || (this.options.workVersion?.() ?? 0) !== observedWork
+          if (workChanged()) {
+            if (!this.active(name, fresh)) this.again = true
+            return
+          }
           await this.options.local.writeText(name, candidate.text!)
-          this.check(epoch)
+          if (epoch !== this.epoch || workChanged()) {
+            // No canonical saves can run while this short local section is held.
+            // Restore the observed baseline if work began during async file replacement.
+            if (fresh === null) await this.options.local.deleteText(name)
+            else await this.options.local.writeText(name, fresh)
+            this.check(epoch)
+            if (!this.active(name, fresh)) this.again = true
+            return
+          }
           this.options.onApplied?.(name, other)
           report.downloaded += 1
           remoteEntries.set(name, entryFromConversation(other, name))
+          this.data.deferred = this.data.deferred.filter((item) => item.name !== name)
+          await this.persist(epoch)
+          // Accepted imports must be visible even if a later read or upload fails.
+          await this.refreshLocalManifest(epoch)
+          await this.options.onHistory?.()
         } else if (
           local &&
           other &&
@@ -455,6 +477,7 @@ export class ReconciliationCoordinator {
         } else if (local && (!other || compareInstants(instant(local.updatedAt)!, instant(other.updatedAt)!) > 0)) {
           upload = fresh!
         } else if (other) remoteEntries.set(name, entryFromConversation(other, name))
+        else if (fresh === null && candidate.text === null) remoteEntries.delete(name)
         if (deferred && !this.active(name, fresh))
           this.data.deferred = this.data.deferred.filter((item) => item.name !== name)
       })
@@ -462,7 +485,17 @@ export class ReconciliationCoordinator {
         this.phase = 'upload'
         this.check(epoch)
         if (upload === null) await remote.deleteText(name)
-        else await remote.writeText(name, upload)
+        else {
+          try {
+            if (!remote.writeRevision) throw new Error('Destination does not support safe conditional writes.')
+            await remote.writeRevision(name, upload, candidate)
+          } catch (error) {
+            this.check(epoch)
+            if (!(error instanceof RemotePreconditionError)) throw error
+            this.again = true
+            return
+          }
+        }
         this.check(epoch)
         if (deleted) remoteEntries.delete(name)
         else {
@@ -486,14 +519,7 @@ export class ReconciliationCoordinator {
     // Build local metadata under the same coordination as saves and accepted downloads.
     await this.localMutation(async () => {
       this.check(epoch)
-      const entries: ManifestEntry[] = []
-      for (const name of (await this.options.local.listFileNames()).filter(isConversationFileName)) {
-        const value = revision(await this.options.local.readText(name))
-        if (value) entries.push(entryFromConversation(value, name))
-      }
-      const serialized = serializeManifest({ version: 1, conversations: sortManifestEntries(entries) })
-      if ((await this.localRead(MANIFEST_FILE_NAME)) !== serialized)
-        await this.options.local.writeText(MANIFEST_FILE_NAME, serialized)
+      await this.refreshLocalManifest(epoch)
       this.check(epoch)
     })
     const serializedRemote = serializeManifest({
@@ -503,7 +529,15 @@ export class ReconciliationCoordinator {
     if (manifestValue.text !== serializedRemote) {
       this.phase = 'upload'
       this.check(epoch)
-      await remote.writeText(MANIFEST_FILE_NAME, serializedRemote)
+      try {
+        if (!remote.writeRevision) throw new Error('Destination does not support safe conditional writes.')
+        await remote.writeRevision(MANIFEST_FILE_NAME, serializedRemote, manifestValue)
+      } catch (error) {
+        this.check(epoch)
+        if (!(error instanceof RemotePreconditionError)) throw error
+        this.again = true
+        return
+      }
       this.check(epoch)
       report.manifestUploaded = true
     }
@@ -519,6 +553,19 @@ export class ReconciliationCoordinator {
       await this.options.onHistory?.()
       this.check(epoch)
     })
+  }
+
+  private async refreshLocalManifest(epoch: number): Promise<void> {
+    this.check(epoch)
+    const entries: ManifestEntry[] = []
+    for (const name of (await this.options.local.listFileNames()).filter(isConversationFileName)) {
+      const value = revision(await this.options.local.readText(name))
+      if (value) entries.push(entryFromConversation(value, name))
+    }
+    const serialized = serializeManifest({ version: 1, conversations: sortManifestEntries(entries) })
+    if ((await this.localRead(MANIFEST_FILE_NAME)) !== serialized)
+      await this.options.local.writeText(MANIFEST_FILE_NAME, serialized)
+    this.check(epoch)
   }
 
   /** A presented hold is a choice token: remote changes require another user choice. */
@@ -553,6 +600,8 @@ export class ReconciliationCoordinator {
         await this.hold(name, hold.kind, candidate, localRaw, epoch)
         return
       }
+      const observedWork = this.options.workVersion?.() ?? 0
+      const workChanged = () => this.active(name, localRaw) || (this.options.workVersion?.() ?? 0) !== observedWork
       const other = revision(candidate.text)
       const chosen = choice === 'local' ? local : other
       if (hold.kind !== 'legacy-delete' && !chosen) return
@@ -567,7 +616,18 @@ export class ReconciliationCoordinator {
         const content = serializeConversation(resolved)
         // Keep the hold until local commit and durable queue replacement both succeed.
         await this.persist(epoch)
+        if (workChanged()) {
+          result.outcome = 'busy'
+          return
+        }
         await this.options.local.writeText(name, content)
+        if (epoch !== this.epoch || workChanged()) {
+          if (localRaw === null) await this.options.local.deleteText(name)
+          else await this.options.local.writeText(name, localRaw)
+          this.check(epoch)
+          result.outcome = 'busy'
+          return
+        }
         this.check(epoch)
         this.options.onApplied?.(name, resolved)
         this.data.operations = this.data.operations.filter((op) => op.name !== name)

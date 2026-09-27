@@ -38,6 +38,17 @@ export function toConversation(value: ConversationDraft, base: Conversation | nu
     const prior = previous.get(message.id)
     return prior ? { ...prior, ...stored } : stored
   })
+  // Hidden tool records remain in their original positions when editing visible messages.
+  const remaining = new Map(messages.map((message) => [message.id, message]))
+  const preserved: ConversationMessage[] = []
+  for (const message of base?.messages ?? []) {
+    if (message.role === 'tool') preserved.push(message)
+    else if (remaining.has(message.id)) {
+      preserved.push(remaining.get(message.id)!)
+      remaining.delete(message.id)
+    }
+  }
+  preserved.push(...remaining.values())
   return {
     id: value.id,
     title: base?.title || messages.find((message) => message.role === 'user')?.content.slice(0, 80) || '',
@@ -47,7 +58,8 @@ export function toConversation(value: ConversationDraft, base: Conversation | nu
     // not reorder history (spec 119 FR-006).
     updatedAt: newestActivity(value, base),
     draft: value.draft,
-    messages,
+    messages: preserved,
+    ...(base?.selectionProvenance ? { selectionProvenance: base.selectionProvenance } : {}),
   }
 }
 

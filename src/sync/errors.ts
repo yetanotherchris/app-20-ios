@@ -5,3 +5,11 @@ export class RemoteMissingError extends Error {
     this.name = 'RemoteMissingError'
   }
 }
+
+/** A conditional object mutation lost a race; re-read instead of replacing newer data. */
+export class RemotePreconditionError extends Error {
+  constructor() {
+    super('S3 revision changed.')
+    this.name = 'RemotePreconditionError'
+  }
+}

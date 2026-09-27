@@ -45,3 +45,10 @@ Independent test: offline recovery, relaunch, deletes, held manifests, explicit 
 ## Dependencies and execution
 
 T001 gates coding. T002–T004 precede US1, US1 precedes US2, US3 completes shared protection before release. T016–T020 gate T021. All stories are P1; startup import is the first increment, not the full deliverable. Independent test files can be developed in parallel after shared contracts, but shared coordinator/screen edits are sequential. Review roles run independently against the same final scoped baseline diff. All 21 tasks use checklist IDs and explicit file paths (US1: 3, US2: 3, US3: 5, shared/final: 10).
+
+## Published PR remediation
+
+- [x] T022 Run fresh independent correctness, requirements and security reviews against published PR head and archived spec; record findings in review.md.
+- [x] T023 Fix completed-history saves, active-work replacement races, partial-import metadata, deletion retry and concurrent S3 writes; add regression tests in tests/chat and tests/sync.
+- [x] T024 Obtain independent verification of final fixes and complete automated checks; record reviewed diff and limitations in review.md.
+- [x] T025 Commit and push reviewed remediation to the existing authorized PR #3 and update its validation description.

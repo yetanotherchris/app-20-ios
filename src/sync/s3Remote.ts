@@ -6,7 +6,7 @@ import {
   S3Client,
   type S3ClientConfig,
 } from '@aws-sdk/client-s3'
-import { RemoteMissingError } from './errors'
+import { RemoteMissingError, RemotePreconditionError } from './errors'
 import type { SyncRemote } from './types'
 import type { S3Config } from '../secrets/secretService'
 
@@ -76,7 +76,7 @@ export function createS3Remote(config: S3Config, client = new S3Client(clientOpt
           if (!object.Body) throw new Error('S3 object body unavailable.')
           const bytes: Uint8Array = await object.Body.transformToByteArray()
           const { toUtf8 } = await import('@smithy/util-utf8')
-          return { text: toUtf8(bytes), bytes: Array.from(bytes) }
+          return { text: toUtf8(bytes), bytes: Array.from(bytes), etag: object.ETag }
         })
         return result
       } catch (error) {
@@ -95,6 +95,28 @@ export function createS3Remote(config: S3Config, client = new S3Client(clientOpt
         return object.Body.transformToString()
       } catch (error) {
         if (isMissing(error)) throw new RemoteMissingError(name)
+        throw error
+      }
+    },
+    async writeRevision(name, content, expected) {
+      if (expected.text !== null && !expected.etag) throw new Error('S3 revision validator unavailable.')
+      try {
+        await withTimeout((signal) =>
+          client.send(
+            new PutObjectCommand({
+              Bucket: config.bucket,
+              Key: keyFor(name),
+              Body: content,
+              ContentType: 'application/json',
+              ...(expected.text === null ? { IfNoneMatch: '*' } : { IfMatch: expected.etag }),
+            }),
+            { abortSignal: signal },
+          ),
+        )
+      } catch (error) {
+        const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode
+        if (status === 412 || status === 409 || (status === 404 && expected.text !== null))
+          throw new RemotePreconditionError()
         throw error
       }
     },

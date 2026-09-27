@@ -9,7 +9,7 @@ export function createSyncService(
   local: ConversationFilePort,
   secrets: SecretService,
   onState: NonNullable<ReconciliationOptions['onState']>,
-  callbacks: Pick<ReconciliationOptions, 'isActive' | 'onApplied' | 'onHistory' | 'onHolds'> = {},
+  callbacks: Pick<ReconciliationOptions, 'isActive' | 'workVersion' | 'onApplied' | 'onHistory' | 'onHolds'> = {},
 ): ReconciliationCoordinator {
   return new ReconciliationCoordinator({
     local,

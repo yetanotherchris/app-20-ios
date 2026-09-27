@@ -1,4 +1,4 @@
-import { RemoteMissingError } from './errors'
+import { RemoteMissingError, RemotePreconditionError } from './errors'
 import type { SyncRemote } from './types'
 
 export interface InMemorySyncRemote extends SyncRemote {
@@ -7,7 +7,7 @@ export interface InMemorySyncRemote extends SyncRemote {
 
 export function createInMemorySyncRemote(seed: Record<string, string> = {}): InMemorySyncRemote {
   const objects = new Map<string, string>(Object.entries(seed))
-  return {
+  const remote: InMemorySyncRemote = {
     objects,
     async listNames() {
       return [...objects.keys()]
@@ -17,6 +17,10 @@ export function createInMemorySyncRemote(seed: Record<string, string> = {}): InM
       if (content === undefined) throw new RemoteMissingError(name)
       return content
     },
+    async writeRevision(name, content, expected) {
+      if ((objects.get(name) ?? null) !== expected.text) throw new RemotePreconditionError()
+      await remote.writeText(name, content)
+    },
     async writeText(name, content) {
       objects.set(name, content)
     },
@@ -24,4 +28,5 @@ export function createInMemorySyncRemote(seed: Record<string, string> = {}): InM
       objects.delete(name)
     },
   }
+  return remote
 }
