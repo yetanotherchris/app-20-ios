@@ -194,7 +194,14 @@ export function createSecretService(): SecretService {
     const asset = picker.assets[0]
     if (!asset) return { ok: false, code: 'unknown' }
     try {
-      const raw = await FileSystem.readAsStringAsync(asset.uri)
+      let raw: string
+      try {
+        raw = await FileSystem.readAsStringAsync(asset.uri)
+      } finally {
+        if (FileSystem.cacheDirectory && asset.uri.startsWith(`${FileSystem.cacheDirectory}DocumentPicker/`)) {
+          await FileSystem.deleteAsync(asset.uri, { idempotent: true })
+        }
+      }
       const normalized = kind === 'provider-key' ? validateProviderKey(raw) : validateS3(raw)
       if (!normalized) return invalid()
       await serialized(async () => {

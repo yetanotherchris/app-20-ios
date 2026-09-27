@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
-import { File } from 'expo-file-system'
+import { File, Paths } from 'expo-file-system'
 import type { SecretService, SettingsSnapshot } from '../secrets/secretService'
 import { decodeSettingsFile, parseSettingsImport } from './settingsImport'
 import { createSettingsOperations } from './settingsOperations'
@@ -44,6 +44,8 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
   const [importStatus, setImportStatus] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [hydrating, setHydrating] = useState(true)
+  const [savedS3Configured, setSavedS3Configured] = useState(false)
+  const manualSavePending = useRef(false)
   const [revealed, setRevealed] = useState<'apiKey' | 'secretAccessKey' | null>(null)
   const latestDraft = useRef(draft)
   const saving = useRef<Promise<void> | null>(null)
@@ -56,13 +58,21 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
 
   const save = useEffectEvent(async (value: SettingsSnapshot, fromImport = false): Promise<boolean> => {
     if (importInProgress.current && !fromImport) return false
+    if (!fromImport && !manualSavePending.current && !pendingImport.current) return true
     const result = validateSettings(value)
     setErrors(result.errors)
     setStatus('saving')
     const atomic = pendingImport.current
     const operation = async (): Promise<void> => {
       if (atomic) {
-        await service.commitSettings(value.apiKey.trim(), result.value?.s3)
+        await service.commitSettings(
+          value.apiKey,
+          result.value
+            ? result.value.s3 === null
+              ? null
+              : { ...value.s3, endpoint: value.s3.endpoint || undefined }
+            : undefined,
+        )
       } else {
         await service.saveApiKey(value.apiKey.trim())
         if (result.value) await service.saveS3Config(result.value.s3)
@@ -85,6 +95,8 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
         pendingImport.current = false
         setImportStatus(result.value ? 'Imported settings. Saved.' : 'Imported settings. Complete S3 Keys to save.')
       }
+      if (result.value) setSavedS3Configured(result.value.s3 !== null)
+      if (latestDraft.current === value) manualSavePending.current = false
       onSaved()
       return true
     } catch {
@@ -120,6 +132,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
         if (cancelled) return
         latestDraft.current = value
         setDraft(value)
+        setSavedS3Configured(Boolean(validateSettings(value).value?.s3))
         setErrors({})
         setStatus('idle')
         setImportStatus(null)
@@ -149,6 +162,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
     latestDraft.current = next
     setDraft(next)
     setImportStatus(null)
+    manualSavePending.current = true
     scheduleSave(next)
   }
 
@@ -156,6 +170,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
     if (hydrating || !operationsRef.current.beginImport()) return
     importInProgress.current = true
     setImporting(true)
+    let accepted = false
     try {
       const picker = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -166,16 +181,23 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
       const asset = picker.assets[0]
       setImportStatus(`Reading ${asset.name}…`)
       const file = new File(asset.uri)
-      if ((asset.size ?? 0) > 1024 * 1024 || file.size > 1024 * 1024) {
-        setImportStatus('The selected file is larger than 1 MiB.')
-        return
-      }
+      const pickerCache = `${Paths.cache.uri.replace(/\/$/, '')}/DocumentPicker/`
       let content: string
       try {
-        content = decodeSettingsFile(await file.bytes())
-      } catch {
-        setImportStatus('Use a UTF-8 settings file no larger than 1 MiB.')
-        return
+        if ((asset.size ?? 0) > 1024 * 1024 || file.size > 1024 * 1024) {
+          setImportStatus('The selected file is larger than 1 MiB.')
+          return
+        }
+        try {
+          content = decodeSettingsFile(await file.bytes())
+        } catch {
+          setImportStatus('Use a UTF-8 settings file no larger than 1 MiB.')
+          return
+        }
+      } finally {
+        // Remove only the picker-created app cache copy, before parsing or committing.
+        // A user-owned source returned by a provider must never be deleted.
+        if (asset.uri.startsWith(pickerCache)) file.delete()
       }
       const parsed = parseSettingsImport(asset.name, content)
       if (!parsed.ok) {
@@ -183,6 +205,11 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
         return
       }
       setRevealed(null)
+      // Normalize supplied destination fields only; omitted values and raw credentials survive unchanged.
+      for (const field of ['bucket', 'region', 'endpoint'] as const) {
+        const supplied = parsed.patch.s3?.[field]
+        if (supplied !== undefined) parsed.patch.s3![field] = supplied.trim()
+      }
       const next = mergeSettingsPatch(latestDraft.current, parsed.patch)
       // A valid partial S3 group remains in the draft until the required
       // fields are supplied. The complete saved group remains unchanged.
@@ -198,6 +225,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
         setImportStatus('Correct invalid settings before importing.')
         return
       }
+      accepted = true
       pendingImport.current = true
       latestDraft.current = next
       setDraft(next)
@@ -215,6 +243,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
       importInProgress.current = false
       operationsRef.current.finishImport()
       setImporting(false)
+      if (!accepted && manualSavePending.current) scheduleSave(latestDraft.current)
     }
   }
 
@@ -230,7 +259,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
     onClose()
   }
 
-  const s3Configured = Boolean(validateSettings(draft).value?.s3)
+  const s3Configured = savedS3Configured
   const interactionLocked = hydrating || importing
   return (
     <Modal animationType="slide" onRequestClose={close} presentationStyle="pageSheet" visible={visible}>

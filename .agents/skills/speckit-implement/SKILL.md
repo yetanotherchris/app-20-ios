@@ -1,12 +1,15 @@
 ---
-name: "speckit-implement"
-description: "Execute the implementation plan by processing and executing all tasks defined in tasks.md"
-compatibility: "Requires spec-kit project structure with .specify/ directory"
+name: 'speckit-implement'
+description: 'Execute the implementation plan by processing and executing all tasks defined in tasks.md'
+compatibility: 'Requires spec-kit project structure with .specify/ directory'
 metadata:
-  author: "github-spec-kit"
-  source: "templates/commands/implement.md"
+  author: 'github-spec-kit'
+  source: 'templates/commands/implement.md'
 ---
 
+## Repository workflow requirements
+
+Before executing this skill, read `AGENTS.md` at the repository root. Follow its stage-specific review, remediation, validation, and archive requirements. In a combined workflow, continue through the authorized stages rather than treating a stage completion report as completion of the entire request.
 
 ## User Input
 
@@ -19,6 +22,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before implementation)**:
+
 - Check if `.specify/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_implement` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
@@ -184,9 +188,10 @@ Note: This command assumes a complete task breakdown exists in tasks.md. If task
 **You MUST complete this section before reporting completion to the user.**
 
 Check if `.specify/extensions.yml` exists in the project root.
-- If it does not exist, or no hooks are registered under `hooks.after_implement`, skip to the Completion Report.
+
+- If it does not exist, or no hooks are registered under `hooks.after_implement`, skip to the Repository completion gate.
 - If it exists, read it and look for entries under the `hooks.after_implement` key.
-- If the YAML cannot be parsed or is invalid, skip hook checking silently and continue to the Completion Report.
+- If the YAML cannot be parsed or is invalid, skip hook checking silently and continue to the Repository completion gate.
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
 - For each remaining hook, do **not** attempt to interpret or evaluate hook `condition` expressions:
   - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
@@ -213,6 +218,10 @@ Check if `.specify/extensions.yml` exists in the project root.
     Prompt: {prompt}
     To execute: `/{command}`
     ```
+
+## Repository completion gate
+
+Before the completion report, run the independent code and requirements review agents required by root `AGENTS.md`, plus the conditional security/privacy review. Resolve findings, obtain follow-up verification, update the feature review record and tasks, rerun affected checks, and archive the completed spec with repaired links. Complete this gate before creating a requested PR or claiming implementation workflow completion.
 
 ## Completion Report
 

@@ -1,10 +1,10 @@
 # Feature Specification: TOML Settings
 
-**Feature Branch**: `spec-121-124-settings-models-s3`
+**Feature Branch**: `121-toml-settings`
 **Created**: 2026-09-26
-**Status**: Draft
+**Status**: Archived
 **Input**: User decision: "Use TOML instead of YAML for settings."
-**Depends on**: [112 Settings and Credentials](../archive/112-ios-settings-credentials/spec.md), [113 Settings File Import](../archive/113-ios-settings-file-import/spec.md)
+**Depends on**: [112 Settings and Credentials](../112-ios-settings-credentials/spec.md), [113 Settings File Import](../113-ios-settings-file-import/spec.md)
 
 ## Purpose
 

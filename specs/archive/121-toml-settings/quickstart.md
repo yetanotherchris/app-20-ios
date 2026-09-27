@@ -14,10 +14,12 @@ Device checks require macOS/iOS tooling and are recorded separately when availab
 
 ## Recorded results (2026-09-27)
 
-- Full Vitest suite: 19 files, 148 tests passed, including import failures, UTF-8, migration recovery, atomic commits and focus-event save suppression.
+- Full Vitest suite: 19 files, 158 tests passed, including import failures, UTF-8, migration recovery, atomic commits and focus-event save suppression.
 - TypeScript and ESLint passed.
 - Expo iOS export succeeded: 1610 modules, Hermes bundle generated under ignored `.expo/spec-121-export`.
 - Changed-file Prettier check passed.
 - Spec checklist: 12/12 checked. No extension hook configuration exists.
 - PowerShell 7.4.13 installed in WSL at `~/.local/share/powershell`, launcher `~/.local/bin/pwsh`; prerequisite helper passed with Linux paths.
 - Device picker behavior, real Keychain failure/termination injection and Maestro were not run: no iOS simulator/device tooling in WSL. Automated storage tests model complete record replacement before/after the commit boundary.
+
+Independent code, requirements/design and security reviews passed after remediation; see [review.md](review.md). The completed spec is archived; native acceptance limitations above remain explicit.

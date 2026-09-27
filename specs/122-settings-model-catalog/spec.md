@@ -4,7 +4,7 @@
 **Created**: 2026-09-26
 **Status**: Draft
 **Input**: User description: "Add and toggle models in Settings using a searchable full list from an OpenAI-compatible /models endpoint, then show enabled models in the conversation dropdown."
-**Depends on**: [121 TOML Settings](../121-toml-settings/spec.md), [123 Configurable Provider Endpoint](../123-provider-endpoint/spec.md)
+**Depends on**: [121 TOML Settings](../archive/121-toml-settings/spec.md), [123 Configurable Provider Endpoint](../123-provider-endpoint/spec.md)
 
 ## Purpose
 

@@ -1,6 +1,6 @@
 # Tasks: TOML Settings
 
-Input: specs/121-toml-settings/ design artifacts. Tests implement the specification’s independent tests and failure-boundary scenarios.
+Input: specs/archive/121-toml-settings/ design artifacts. Tests implement the specification’s independent tests and failure-boundary scenarios.
 
 ## Phase 1: Setup
 
@@ -32,7 +32,14 @@ Independent test: seed legacy records, fail replacement write, retry and relaunc
 ## Phase 5: Polish
 
 - [x] T010 Update README.md, docs/examples/settings.toml and tests/e2e/ios/chat.yaml for TOML and legacy imports.
-- [x] T011 Run automated checks and bundle validation; record results/limitations in specs/121-toml-settings/quickstart.md.
+- [x] T011 Run automated checks and bundle validation; record results/limitations in specs/archive/121-toml-settings/quickstart.md.
+
+## Phase 6: Independent review and archive
+
+- [x] T012 Run independent design/requirements, code, and security reviews and record findings in specs/archive/121-toml-settings/review.md.
+- [x] T013 Remediate findings in src/settings/SettingsSheet.tsx and src/secrets/secretService.ts, add regression tests in tests/settings/SettingsSheet.test.tsx, and obtain reviewer verification.
+- [x] T014 Add automatic review/archive gates in AGENTS.md and .agents/skills/speckit-{plan,tasks,implement,analyze,converge}/SKILL.md; independently review the instructions.
+- [x] T015 Archive the completed feature under specs/archive/121-toml-settings/, update spec.md status, repair dependencies/index links, and record final checks in quickstart.md and review.md.
 
 ## Dependencies and parallel opportunities
 
@@ -40,4 +47,4 @@ T001 → T002 → US1 → US2 → polish. T003/T004 are independent test files a
 
 ## Strategy
 
-Deliver US1 MVP with atomic imports, then migration US2, then full regression and bundle checks. Both P1 stories ship together to preserve existing users. All tasks follow checkbox/ID/story/path format; 11 total (5 US1, 2 US2, 4 shared/polish).
+Deliver US1 MVP with atomic imports, then migration US2, then full regression and bundle checks. Both P1 stories ship together to preserve existing users. All tasks follow checkbox/ID/story/path format; 15 total (5 US1, 2 US2, 8 shared/review/archive).

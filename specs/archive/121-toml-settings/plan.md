@@ -24,7 +24,7 @@ PASS before research and after design: `.specify/memory/constitution.md` is an u
 
 ## Project Structure
 
-Feature artifacts: plan.md, research.md, data-model.md, contracts/settings.md, quickstart.md, tasks.md under specs/121-toml-settings/.
+Feature artifacts: plan.md, research.md, data-model.md, contracts/settings.md, quickstart.md, tasks.md under specs/archive/121-toml-settings/.
 Source: src/settings/{settingsImport,settingsToml,settingsValidation,SettingsSheet}.ts(x), src/secrets/secretService.ts.
 Tests: tests/settings/ and tests/secrets/. Examples: docs/examples/settings.toml; README.md.
 
