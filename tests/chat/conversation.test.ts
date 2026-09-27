@@ -67,3 +67,12 @@ describe('toConversation ordering', () => {
     expect(conversation.updatedAt).toBe('2026-09-10T11:00:00.000Z')
   })
 })
+
+it('does not persist an in-progress response as successfully completed', () => {
+  const streaming: Message = { ...userMessage('a', base.updatedAt), role: 'assistant', status: 'streaming' }
+  const conversation = toConversation(
+    { id: 'c1', createdAt: base.createdAt, model: '', messages: [streaming], draft: '' },
+    base,
+  )
+  expect(conversation.messages[0]?.status).toBe('stopped')
+})

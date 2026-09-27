@@ -256,3 +256,19 @@ describe('TOML import commits', () => {
     expect(settings.commitSettings).not.toHaveBeenCalled()
   })
 })
+
+it('explains transfer of local history to a changed S3 destination', async () => {
+  render(
+    <SettingsSheet
+      visible
+      service={service(Promise.resolve(savedSettings))}
+      onClose={() => undefined}
+      onSaved={() => undefined}
+    />,
+  )
+  expect(
+    screen.getByText(
+      'Changing the bucket, region or endpoint syncs all eligible chats on this device to the new destination.',
+    ),
+  ).toBeVisible()
+})

@@ -36,6 +36,8 @@ import { AutosaveQueue } from './autosaveQueue'
 import { fromConversation, toConversation, toProviderMessages } from './conversation'
 import { classifySettlement } from './sendRecovery'
 import { createSyncService } from '../sync/syncService'
+import { equivalent, freshTimestamp } from '../sync/revision'
+import type { SyncHold } from '../sync/reconciliation'
 import NativeRenameAlert from '../../modules/native-rename-alert'
 
 interface AppStateSource {
@@ -101,6 +103,9 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   const baseRef = useRef<Conversation | null>(null)
   const messagesRef = useRef<readonly Message[]>([])
   const draftRef = useRef('')
+  const localSavingRef = useRef(false)
+  const chatStatusRef = useRef('idle')
+  const applyRemoteRef = useRef<(conversation: Conversation) => void>(() => undefined)
   const parkedDraftRef = useRef<string | null>(null)
   const editSourceRef = useRef<string | null>(null)
   const conversationUiStateRef = useRef(new Map<string, ConversationUiState>())
@@ -127,6 +132,8 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   const [historyLoading, setHistoryLoading] = useState(false)
   const [mutationPending, setMutationPending] = useState(false)
   const [s3SaveFailed, setS3SaveFailed] = useState(false)
+  const [historySyncFailed, setHistorySyncFailed] = useState(false)
+  const [syncHolds, setSyncHolds] = useState<SyncHold[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [hasProviderKey, setHasProviderKey] = useState(false)
   const [gatePending, setGatePending] = useState(false)
@@ -135,10 +142,47 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
 
   const syncRef = useRef<ReturnType<typeof createSyncService> | null>(null)
   if (!syncRef.current) {
-    syncRef.current = createSyncService(filePortRef.current, secretsRef.current, (state) => {
-      if (state === 'error') setS3SaveFailed(true)
-      if (state === 'idle' || state === 'disabled') setS3SaveFailed(false)
-    })
+    syncRef.current = createSyncService(
+      filePortRef.current,
+      secretsRef.current,
+      (state, phase) => {
+        if (state === 'error') {
+          setHistorySyncFailed(phase === 'history')
+          setS3SaveFailed(phase === 'upload')
+        }
+        if (state === 'idle' || state === 'disabled' || state === 'pending') {
+          setS3SaveFailed(false)
+          setHistorySyncFailed(false)
+        }
+      },
+      {
+        isActive: (_name, conversation) => {
+          if (!conversation) return localSavingRef.current
+          if (conversation.id === conversationIdRef.current)
+            return (
+              localSavingRef.current ||
+              chatStatusRef.current !== 'idle' ||
+              Boolean(controllerRef.current) ||
+              draftRef.current !== (baseRef.current?.draft ?? '') ||
+              Boolean(editSourceRef.current)
+            )
+          const parked = conversationUiStateRef.current.get(conversation.id)
+          return Boolean(
+            parked &&
+            (parked.editSourceId || parked.parkedDraft !== null || parked.draft !== (conversation.draft ?? '')),
+          )
+        },
+        onApplied: (_name, conversation) => {
+          if (conversation.id === conversationIdRef.current) applyRemoteRef.current(conversation)
+          else conversationUiStateRef.current.delete(conversation.id)
+        },
+        onHistory: async () => {
+          const listed = await storeRef.current.list()
+          setEntries(listed.entries)
+        },
+        onHolds: setSyncHolds,
+      },
+    )
   }
   const sync = syncRef.current
 
@@ -167,7 +211,11 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   async function mirrorLocalFile(name: string, content: string | null): Promise<void> {
     if (!(await secretsRef.current.getS3Config())) return
     mirrorRevisionRef.current += 1
-    await sync.schedule({ content, name, revision: mirrorRevisionRef.current })
+    try {
+      await sync.schedule({ content, name, revision: mirrorRevisionRef.current })
+    } catch {
+      setS3SaveFailed(true)
+    }
   }
 
   async function mirrorManifest(): Promise<void> {
@@ -190,9 +238,26 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
         ),
       saveSnapshot: async (conversation) => {
         if (!conversation.messages.some((message) => message.role === 'user')) return
-        const result = await storeRef.current.save(conversation)
-        baseRef.current = conversation
-        await mirrorLocalFile(result.fileName, await filePortRef.current.readText(result.fileName))
+        localSavingRef.current = true
+        let fileName = ''
+        try {
+          await sync.localMutation(async () => {
+            const previous = baseRef.current?.id === conversation.id ? baseRef.current : null
+            const unchanged = previous && equivalent(JSON.stringify(previous), JSON.stringify(conversation), true)
+            conversation = {
+              ...conversation,
+              updatedAt: unchanged
+                ? previous.updatedAt
+                : freshTimestamp(previous?.updatedAt ?? '', conversation.updatedAt),
+            }
+            const result = await storeRef.current.save(conversation)
+            fileName = result.fileName
+            if (conversation.id === conversationIdRef.current) baseRef.current = conversation
+          })
+        } finally {
+          localSavingRef.current = false
+        }
+        await mirrorLocalFile(fileName, await filePortRef.current.readText(fileName))
         await mirrorManifest()
       },
       onFailure: () => setNotice('Conversation save failed. Your current text is still available.'),
@@ -223,34 +288,59 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
             setNotice('The response could not be completed.')
           }
         } finally {
-          controllerRef.current = null
-          controlsRef.current = null
-          if (requestGeneration === sessionGenerationRef.current) autosave.trigger()
+          if (requestGeneration === sessionGenerationRef.current) {
+            controllerRef.current = null
+            controlsRef.current = null
+            setTimeout(() => {
+              if (requestGeneration === sessionGenerationRef.current) autosave.trigger()
+            }, 0)
+          }
         }
       })()
     },
   })
+  chatStatusRef.current = chat.status
   messagesRef.current = chat.messages
+  applyRemoteRef.current = (conversation) => {
+    baseRef.current = conversation
+    createdAtRef.current = conversation.createdAt
+    messagesRef.current = fromConversation(conversation)
+    chat.replaceMessages(messagesRef.current)
+    draftRef.current = conversation.draft ?? ''
+    setDraftState(draftRef.current)
+    conversationUiStateRef.current.delete(conversation.id)
+  }
+
+  const completedResponseRef = useRef(new Set<string>())
+  useEffect(() => {
+    const response = chat.messages.at(-1)
+    if (
+      chat.status !== 'idle' ||
+      response?.role !== 'assistant' ||
+      response.status !== 'complete' ||
+      completedResponseRef.current.has(response.id)
+    )
+      return
+    completedResponseRef.current.add(response.id)
+    // One terminal completion trigger, including edit-and-resend; chunks cannot enter this branch.
+    autosave.trigger()
+  }, [chat.messages, chat.status, autosave])
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const listed = await storeRef.current.list()
+      const listed = await sync.localMutation(() => storeRef.current.list())
       if (cancelled) return
       setEntries(listed.entries)
+      void sync.run()
     })()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [sync])
 
   useEffect(() => {
     void secretsRef.current.hasProviderKey().then(setHasProviderKey)
-    // Resume pending remote operations recorded before termination when a
-    // complete S3 configuration is available (FR-021).
-    void (async () => {
-      if (await secretsRef.current.getS3Config()) await sync.run()
-    })()
   }, [sync])
 
   useEffect(() => {
@@ -383,10 +473,21 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
     void autosave.flush()
   }
 
+  async function resolveSyncHold(hold: SyncHold, choice: 'local' | 'remote'): Promise<void> {
+    try {
+      const result = await sync.resolve(hold.name, choice, hold)
+      if (result === 'busy') setNotice('Finish or discard active edits before resolving sync.')
+      if (result === 'changed')
+        setNotice('The S3 revision changed or that copy is unavailable. Review the current choices again.')
+    } catch {
+      setNotice('Couldn’t resolve sync. Your copies are preserved. Retry sync.')
+    }
+  }
+
   async function refreshHistory(): Promise<void> {
     setHistoryLoading(true)
     try {
-      const result = await storeRef.current.list()
+      const result = await sync.localMutation(() => storeRef.current.list())
       setEntries(result.entries.slice(0, 5))
       setHistoryError(null)
     } catch {
@@ -417,8 +518,13 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       .then((title) => {
         if (title === null) return
         setMutationPending(true)
-        return storeRef.current
-          .rename(entry.id, title)
+        return sync
+          .localMutation(async () => {
+            const renamed = await storeRef.current.rename(entry.id, title)
+            const revision = { ...renamed, updatedAt: freshTimestamp(renamed.updatedAt) }
+            await storeRef.current.save(revision)
+            return revision
+          })
           .then(async (renamed) => {
             // Keep the active base in sync so a later autosave does not rebuild the title from the pre-rename value.
             if (entry.id === conversationIdRef.current) baseRef.current = renamed
@@ -447,8 +553,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
                 setHistoryError('The conversation could not be saved before deletion.')
                 return
               }
-              await storeRef.current.delete(entry.id)
-              await mirrorLocalFile(entry.fileName, null)
+              await sync.deleteLocally(entry.fileName, () => storeRef.current.delete(entry.id))
               await mirrorManifest()
               if (isActiveConversation) await newConversation(false)
               await refreshHistory()
@@ -465,33 +570,45 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
 
   async function openConversation(id: string): Promise<void> {
     if (!(await autosave.flush())) return
-    rememberConversationUiState()
-    const result = await storeRef.current.read(id)
-    if (result.kind !== 'ok') {
-      setNotice('The selected conversation is unavailable.')
-      return
-    }
-    controllerRef.current?.abort()
-    baseRef.current = result.conversation
-    conversationIdRef.current = result.conversation.id
-    createdAtRef.current = result.conversation.createdAt
-    chat.replaceMessages(fromConversation(result.conversation))
-    restoreConversationUiState(result.conversation.id, result.conversation.draft ?? '')
-    setHistoryOpen(false)
+    await sync.localMutation(async () => {
+      rememberConversationUiState()
+      const result = await storeRef.current.read(id)
+      if (result.kind !== 'ok') {
+        setNotice('The selected conversation is unavailable.')
+        return
+      }
+      sessionGenerationRef.current += 1
+      controllerRef.current?.abort()
+      controllerRef.current = null
+      baseRef.current = result.conversation
+      conversationIdRef.current = result.conversation.id
+      createdAtRef.current = result.conversation.createdAt
+      messagesRef.current = fromConversation(result.conversation)
+      chat.replaceMessages(messagesRef.current)
+      restoreConversationUiState(result.conversation.id, result.conversation.draft ?? '')
+      setHistoryOpen(false)
+    })
+    void sync.run()
   }
 
   async function newConversation(saveCurrent = true): Promise<void> {
     if (saveCurrent && !(await autosave.flush())) return
-    rememberConversationUiState()
-    controllerRef.current?.abort()
-    conversationIdRef.current = createId('conversation')
-    createdAtRef.current = new Date().toISOString()
-    baseRef.current = null
-    chat.replaceMessages([])
-    setEditSource(null)
-    parkedDraftRef.current = null
-    setDraft('')
-    setHistoryOpen(false)
+    await sync.localMutation(async () => {
+      rememberConversationUiState()
+      sessionGenerationRef.current += 1
+      controllerRef.current?.abort()
+      controllerRef.current = null
+      conversationIdRef.current = createId('conversation')
+      createdAtRef.current = new Date().toISOString()
+      baseRef.current = null
+      messagesRef.current = []
+      chat.replaceMessages([])
+      setEditSource(null)
+      parkedDraftRef.current = null
+      setDraft('')
+      setHistoryOpen(false)
+    })
+    void sync.run()
   }
 
   const renderMessage = useCallback(
@@ -681,7 +798,12 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
             capabilities={{ stop: false }}
             placeholder="Ask anything"
             renderAboveComposer={() =>
-              notice || editSourceId || s3SaveFailed || (!hasProviderKey && draft.trim() !== '') ? (
+              notice ||
+              editSourceId ||
+              s3SaveFailed ||
+              historySyncFailed ||
+              syncHolds.length > 0 ||
+              (!hasProviderKey && draft.trim() !== '') ? (
                 <View>
                   {!hasProviderKey && draft.trim() !== '' ? (
                     <Pressable
@@ -697,6 +819,45 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
                       <Text style={styles.setupNoticeText}>Add your API key in Settings to send messages.</Text>
                     </Pressable>
                   ) : null}
+                  {historySyncFailed ? (
+                    <View style={styles.s3Notice}>
+                      <Text accessibilityRole="alert" style={styles.s3NoticeText}>
+                        Couldn’t sync history from S3. Chats on this device are available.
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry syncing history"
+                        onPress={() => void sync.run()}
+                      >
+                        <Text>Retry</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {syncHolds.map((hold) => (
+                    <View key={hold.name} style={styles.s3Notice}>
+                      <Text accessibilityRole="alert" style={styles.s3NoticeText}>
+                        {hold.kind === 'legacy-delete'
+                          ? 'A previous deletion needs confirmation at this S3 destination.'
+                          : hold.kind === 'malformed'
+                            ? 'An S3 conversation needs repair. Its original data will be preserved.'
+                            : 'Conversation sync is held. Choose which copy to keep.'}
+                      </Text>
+                      <Pressable accessibilityRole="button" onPress={() => void resolveSyncHold(hold, 'local')}>
+                        <Text>
+                          {hold.kind === 'legacy-delete'
+                            ? 'Confirm remote deletion'
+                            : hold.kind === 'malformed'
+                              ? 'Repair from local'
+                              : 'Keep local'}
+                        </Text>
+                      </Pressable>
+                      {hold.kind !== 'malformed' ? (
+                        <Pressable accessibilityRole="button" onPress={() => void resolveSyncHold(hold, 'remote')}>
+                          <Text>{hold.kind === 'legacy-delete' ? 'Restore remote' : 'Use remote'}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ))}
                   {s3SaveFailed ? (
                     <View style={styles.s3Notice}>
                       <Text accessibilityRole="alert" style={styles.s3NoticeText}>
@@ -867,10 +1028,9 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
         visible={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSaved={() => {
+          void sync.configurationChanged()
           void (async () => {
             setHasProviderKey(await secretsRef.current.hasProviderKey())
-            if (!(await secretsRef.current.getS3Config())) await sync.clear()
-            else await sync.run()
           })()
         }}
       />

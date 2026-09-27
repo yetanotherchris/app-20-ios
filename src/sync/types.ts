@@ -5,6 +5,7 @@
 export interface SyncRemote {
   listNames(): Promise<string[]>
   readText(name: string): Promise<string>
+  readRevision?(name: string): Promise<{ text: string; bytes: number[] }>
   writeText(name: string, content: string): Promise<void>
   deleteText(name: string): Promise<void>
 }

@@ -6,7 +6,8 @@ import {
   S3Client,
   type S3ClientConfig,
 } from '@aws-sdk/client-s3'
-import { RemoteMissingError, type SyncRemote } from '.'
+import { RemoteMissingError } from './errors'
+import type { SyncRemote } from './types'
 import type { S3Config } from '../secrets/secretService'
 
 const PREFIX = 'conversations/'
@@ -60,9 +61,28 @@ export function createS3Remote(config: S3Config, client = new S3Client(clientOpt
         for (const item of page.Contents ?? []) {
           if (item.Key?.startsWith(PREFIX)) result.push(item.Key.slice(PREFIX.length))
         }
+        if (page.IsTruncated && (!page.NextContinuationToken || page.NextContinuationToken === token))
+          throw new Error('Invalid S3 listing continuation.')
         token = page.IsTruncated ? page.NextContinuationToken : undefined
       } while (token)
       return result
+    },
+    async readRevision(name) {
+      try {
+        const result = await withTimeout(async (signal) => {
+          const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: keyFor(name) }), {
+            abortSignal: signal,
+          })
+          if (!object.Body) throw new Error('S3 object body unavailable.')
+          const bytes: Uint8Array = await object.Body.transformToByteArray()
+          const { toUtf8 } = await import('@smithy/util-utf8')
+          return { text: toUtf8(bytes), bytes: Array.from(bytes) }
+        })
+        return result
+      } catch (error) {
+        if (isMissing(error)) throw new RemoteMissingError(name)
+        throw error
+      }
     },
     async readText(name) {
       try {
@@ -71,7 +91,7 @@ export function createS3Remote(config: S3Config, client = new S3Client(clientOpt
             abortSignal: signal,
           }),
         )
-        if (!object.Body) throw new RemoteMissingError(name)
+        if (!object.Body) throw new Error('S3 object body unavailable.')
         return object.Body.transformToString()
       } catch (error) {
         if (isMissing(error)) throw new RemoteMissingError(name)

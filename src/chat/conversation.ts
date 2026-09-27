@@ -31,7 +31,9 @@ export function toConversation(value: ConversationDraft, base: Conversation | nu
       role: message.role,
       content: messageText(message),
       createdAt: message.createdAt,
-      status: toPersistedStatus(message.status),
+      status: ['queued', 'sending', 'streaming', 'replyReceived'].includes(message.status)
+        ? 'stopped'
+        : toPersistedStatus(message.status),
     }
     const prior = previous.get(message.id)
     return prior ? { ...prior, ...stored } : stored

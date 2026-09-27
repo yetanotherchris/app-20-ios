@@ -1,12 +1,11 @@
 # Active feature specifications
 
-The active specifications below describe remaining work. [121 TOML Settings](archive/121-toml-settings/spec.md) is implemented and archived, with its [independent review record](archive/121-toml-settings/review.md).
+The active specifications below describe remaining work. [121 TOML Settings](archive/121-toml-settings/spec.md) and [124 Startup and Response S3 Synchronisation](archive/124-startup-response-s3-sync/spec.md) are implemented and archived, with independent review records for [121](archive/121-toml-settings/review.md) and [124](archive/124-startup-response-s3-sync/review.md). Feature 124 passed automated npm S3 validation; its iOS device acceptance remains unverified.
 
-| Spec                                                                                | Scope                                                       |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [122 Searchable Model Settings](122-settings-model-catalog/spec.md)                 | Discover, search, enable, and select provider models        |
-| [123 Configurable Provider Endpoint](123-provider-endpoint/spec.md)                 | Persist an API base URL, defaulting to OpenRouter           |
-| [124 Startup and Response S3 Synchronisation](124-startup-response-s3-sync/spec.md) | Reconcile history at startup and upload completed responses |
+| Spec                                                                | Scope                                                |
+| ------------------------------------------------------------------- | ---------------------------------------------------- |
+| [122 Searchable Model Settings](122-settings-model-catalog/spec.md) | Discover, search, enable, and select provider models |
+| [123 Configurable Provider Endpoint](123-provider-endpoint/spec.md) | Persist an API base URL, defaulting to OpenRouter    |
 
 Each directory includes a specification quality checklist. Existing behavior and design references remain under [archive](archive/).
 
@@ -22,7 +21,7 @@ $env:SPECIFY_FEATURE_DIRECTORY = 'specs/123-provider-endpoint'
 
 Change that value to the desired directory from the table. The shared branch name does not identify an individual feature. `.specify/feature.json`, when created by a skill, is a machine-local alternative and is ignored by Git.
 
-Recommended remaining planning order: 123, 122, then 124. S3 sync can be planned independently of the model and provider changes.
+Recommended remaining planning order: 123, then 122.
 
 The generated constitution in `.specify/memory/constitution.md` is an unratified template. Establish project principles with `$speckit-constitution` before implementation planning relies on it.
 
