@@ -12,9 +12,9 @@ import {
   View,
 } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
-import * as FileSystem from 'expo-file-system/legacy'
+import { File, Paths } from 'expo-file-system'
 import type { SecretService, SettingsSnapshot } from '../secrets/secretService'
-import { parseSettingsImport } from './settingsImport'
+import { decodeSettingsFile, parseSettingsImport } from './settingsImport'
 import { createSettingsOperations } from './settingsOperations'
 import { mergeSettingsPatch, validateSettings, type SettingsErrors } from './settingsValidation'
 import type { SettingsField } from './settingsValidation'
@@ -44,22 +44,39 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
   const [importStatus, setImportStatus] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [hydrating, setHydrating] = useState(true)
+  const [savedS3Configured, setSavedS3Configured] = useState(false)
+  const manualSavePending = useRef(false)
   const [revealed, setRevealed] = useState<'apiKey' | 'secretAccessKey' | null>(null)
   const latestDraft = useRef(draft)
   const saving = useRef<Promise<void> | null>(null)
+  const pendingImport = useRef(false)
+  const importInProgress = useRef(false)
   const hydrated = useRef(false)
   const operationsRef = useRef(createSettingsOperations())
   const scrollRef = useRef<ScrollView>(null)
   const fieldRefs = useRef<Partial<Record<SettingsField, View | null>>>({})
 
-  const save = useEffectEvent(async (value: SettingsSnapshot): Promise<boolean> => {
+  const save = useEffectEvent(async (value: SettingsSnapshot, fromImport = false): Promise<boolean> => {
+    if (importInProgress.current && !fromImport) return false
+    if (!fromImport && !manualSavePending.current && !pendingImport.current) return true
     const result = validateSettings(value)
     setErrors(result.errors)
     setStatus('saving')
+    const atomic = pendingImport.current
     const operation = async (): Promise<void> => {
-      // API-key persistence is independent from an incomplete optional S3 form.
-      await service.saveApiKey(value.apiKey.trim())
-      if (result.value) await service.saveS3Config(result.value.s3)
+      if (atomic) {
+        await service.commitSettings(
+          value.apiKey,
+          result.value
+            ? result.value.s3 === null
+              ? null
+              : { ...value.s3, endpoint: value.s3.endpoint || undefined }
+            : undefined,
+        )
+      } else {
+        await service.saveApiKey(value.apiKey.trim())
+        if (result.value) await service.saveS3Config(result.value.s3)
+      }
     }
     const previous = saving.current ?? Promise.resolve()
     // A failed write must not block a later chained write (FR-009).
@@ -74,9 +91,16 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
           setStatus('idle')
         }
       }
+      if (atomic) {
+        pendingImport.current = false
+        setImportStatus(result.value ? 'Imported settings. Saved.' : 'Imported settings. Complete S3 Keys to save.')
+      }
+      if (result.value) setSavedS3Configured(result.value.s3 !== null)
+      if (latestDraft.current === value) manualSavePending.current = false
       onSaved()
       return true
     } catch {
+      if (atomic) setImportStatus('Imported settings were not saved. Retry saving settings.')
       setStatus('error')
       return false
     } finally {
@@ -108,6 +132,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
         if (cancelled) return
         latestDraft.current = value
         setDraft(value)
+        setSavedS3Configured(Boolean(validateSettings(value).value?.s3))
         setErrors({})
         setStatus('idle')
         setImportStatus(null)
@@ -137,46 +162,88 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
     latestDraft.current = next
     setDraft(next)
     setImportStatus(null)
+    manualSavePending.current = true
     scheduleSave(next)
   }
 
   async function importFile(): Promise<void> {
     if (hydrating || !operationsRef.current.beginImport()) return
+    importInProgress.current = true
     setImporting(true)
+    let accepted = false
     try {
       const picker = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
         multiple: false,
-        type: ['application/json', 'text/plain'],
+        type: '*/*', // iOS providers do not consistently assign a MIME type to TOML.
       })
       if (picker.canceled || !picker.assets[0]) return
       const asset = picker.assets[0]
       setImportStatus(`Reading ${asset.name}…`)
-      const parsed = parseSettingsImport(asset.name, await FileSystem.readAsStringAsync(asset.uri))
+      const file = new File(asset.uri)
+      const pickerCache = `${Paths.cache.uri.replace(/\/$/, '')}/DocumentPicker/`
+      let content: string
+      try {
+        if ((asset.size ?? 0) > 1024 * 1024 || file.size > 1024 * 1024) {
+          setImportStatus('The selected file is larger than 1 MiB.')
+          return
+        }
+        try {
+          content = decodeSettingsFile(await file.bytes())
+        } catch {
+          setImportStatus('Use a UTF-8 settings file no larger than 1 MiB.')
+          return
+        }
+      } finally {
+        // Remove only the picker-created app cache copy, before parsing or committing.
+        // A user-owned source returned by a provider must never be deleted.
+        if (asset.uri.startsWith(pickerCache)) file.delete()
+      }
+      const parsed = parseSettingsImport(asset.name, content)
       if (!parsed.ok) {
         setImportStatus(parsed.error)
         return
       }
       setRevealed(null)
+      // Normalize supplied destination fields only; omitted values and raw credentials survive unchanged.
+      for (const field of ['bucket', 'region', 'endpoint'] as const) {
+        const supplied = parsed.patch.s3?.[field]
+        if (supplied !== undefined) parsed.patch.s3![field] = supplied.trim()
+      }
       const next = mergeSettingsPatch(latestDraft.current, parsed.patch)
       // A valid partial S3 group remains in the draft until the required
       // fields are supplied. The complete saved group remains unchanged.
       const merged = validateSettings(next)
+      const invalidMerged = Object.values(merged.errors).some(
+        (error) =>
+          error &&
+          !['Enter a bucket.', 'Enter a region.', 'Enter an access key ID.', 'Enter a secret access key.'].includes(
+            error,
+          ),
+      )
+      if (invalidMerged) {
+        setImportStatus('Correct invalid settings before importing.')
+        return
+      }
+      accepted = true
+      pendingImport.current = true
       latestDraft.current = next
       setDraft(next)
       setErrors(merged.errors)
       if (!merged.value) {
         setImportStatus(`Imported ${asset.name}. Complete S3 Keys to save.`)
-        await save(next)
+        await save(next, true)
         return
       }
       setImportStatus(`Imported ${asset.name}. Saving…`)
-      if (await save(next)) setImportStatus(`Imported ${asset.name}. Saved.`)
+      await save(next, true)
     } catch {
       setImportStatus('The selected file could not be read.')
     } finally {
+      importInProgress.current = false
       operationsRef.current.finishImport()
       setImporting(false)
+      if (!accepted && manualSavePending.current) scheduleSave(latestDraft.current)
     }
   }
 
@@ -187,12 +254,12 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
 
   function close(): void {
     operationsRef.current.cancelScheduledSave()
-    if (!hydrating) void save(latestDraft.current)
+    if (!hydrating && !importing) void save(latestDraft.current)
     setRevealed(null)
     onClose()
   }
 
-  const s3Configured = validateSettings(draft).value?.s3 !== null
+  const s3Configured = savedS3Configured
   const interactionLocked = hydrating || importing
   return (
     <Modal animationType="slide" onRequestClose={close} presentationStyle="pageSheet" visible={visible}>
@@ -242,14 +309,14 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
           ref={scrollRef}
         >
           <Pressable
-            accessibilityLabel="Import from JSON file"
+            accessibilityLabel="Import from TOML file"
             accessibilityRole="button"
             accessibilityState={{ disabled: interactionLocked }}
             disabled={interactionLocked}
             onPress={() => void importFile()}
             style={styles.import}
           >
-            <Text style={styles.importText}>Import from JSON file</Text>
+            <Text style={styles.importText}>Import from TOML file</Text>
           </Pressable>
           {importStatus ? (
             <Text accessibilityRole="alert" style={styles.importStatus}>

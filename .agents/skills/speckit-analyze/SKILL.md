@@ -1,12 +1,15 @@
 ---
-name: "speckit-analyze"
-description: "Perform a non-destructive cross-artifact consistency and quality analysis across spec.md, plan.md, and tasks.md after task generation."
-compatibility: "Requires spec-kit project structure with .specify/ directory"
+name: 'speckit-analyze'
+description: 'Perform a non-destructive cross-artifact consistency and quality analysis across spec.md, plan.md, and tasks.md after task generation.'
+compatibility: 'Requires spec-kit project structure with .specify/ directory'
 metadata:
-  author: "github-spec-kit"
-  source: "templates/commands/analyze.md"
+  author: 'github-spec-kit'
+  source: 'templates/commands/analyze.md'
 ---
 
+## Repository workflow requirements
+
+Before executing this skill, read `AGENTS.md` at the repository root. Follow its stage-specific review, remediation, validation, and archive requirements. In a combined workflow, continue through the authorized stages rather than treating a stage completion report as completion of the entire request.
 
 ## User Input
 
@@ -19,6 +22,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before analysis)**:
+
 - Check if `.specify/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_analyze` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
@@ -58,7 +62,7 @@ Identify inconsistencies, duplications, ambiguities, and underspecified items ac
 
 ## Operating Constraints
 
-**STRICTLY READ-ONLY**: Do **not** modify any files. Output a structured analysis report. Offer an optional remediation plan (user must explicitly approve before any follow-up editing commands would be invoked manually).
+**STRICTLY READ-ONLY**: Do **not** modify any files. Output a structured analysis report. For standalone analysis, offer remediation without editing unless the user requests it. When invoked within an already authorized plan/task/implement workflow, return the report to the parent agent, which applies in-scope remediation under that existing authorization.
 
 **Constitution Authority**: The project constitution (`.specify/memory/constitution.md`) is **non-negotiable** within this analysis scope. Constitution conflicts are automatically CRITICAL and require adjustment of the spec, plan, or tasks—not dilution, reinterpretation, or silent ignoring of the principle. If a principle itself needs to change, that must occur in a separate, explicit constitution update outside `$speckit-analyze`.
 
@@ -168,16 +172,16 @@ Output a Markdown report (no file writes) with the following structure:
 
 ## Specification Analysis Report
 
-| ID | Category | Severity | Location(s) | Summary | Recommendation |
-|----|----------|----------|-------------|---------|----------------|
-| A1 | Duplication | HIGH | spec.md:L120-134 | Two similar requirements ... | Merge phrasing; keep clearer version |
+| ID  | Category    | Severity | Location(s)      | Summary                      | Recommendation                       |
+| --- | ----------- | -------- | ---------------- | ---------------------------- | ------------------------------------ |
+| A1  | Duplication | HIGH     | spec.md:L120-134 | Two similar requirements ... | Merge phrasing; keep clearer version |
 
 (Add one row per finding; generate stable IDs prefixed by category initial.)
 
 **Coverage Summary Table:**
 
 | Requirement Key | Has Task? | Task IDs | Notes |
-|-----------------|-----------|----------|-------|
+| --------------- | --------- | -------- | ----- |
 
 **Constitution Alignment Issues:** (if any)
 
@@ -202,11 +206,12 @@ At end of report, output a concise Next Actions block:
 
 ### 8. Offer Remediation
 
-Ask the user: "Would you like me to suggest concrete remediation edits for the top N issues?" (Do NOT apply them automatically.)
+For standalone analysis, offer concrete remediation suggestions and remain read-only. In an authorized parent implementation workflow, return findings for automatic in-scope remediation; do not request redundant permission or end the overall workflow.
 
 ### 9. Check for extension hooks
 
 After reporting, check if `.specify/extensions.yml` exists in the project root.
+
 - If it exists, read it and look for entries under the `hooks.after_analyze` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.

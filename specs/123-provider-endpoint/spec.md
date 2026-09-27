@@ -4,7 +4,7 @@
 **Created**: 2026-09-26
 **Status**: Draft
 **Input**: User description: "Add an endpoint setting to Settings, defaulting to the OpenRouter endpoint."
-**Depends on**: [112 Settings and Credentials](../archive/112-ios-settings-credentials/spec.md), [121 TOML Settings](../121-toml-settings/spec.md)
+**Depends on**: [112 Settings and Credentials](../archive/112-ios-settings-credentials/spec.md), [121 TOML Settings](../archive/121-toml-settings/spec.md)
 
 ## Purpose
 

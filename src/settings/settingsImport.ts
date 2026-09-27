@@ -1,3 +1,4 @@
+import { parseSettingsToml } from './settingsToml'
 import type { SettingsSnapshot } from '../secrets/secretService'
 
 export interface SettingsPatch {
@@ -119,42 +120,47 @@ function invalidProvidedValue(s3: Partial<SettingsSnapshot['s3']>): string | nul
 
 function parseJson(raw: string): SettingsImportResult {
   const duplicate = findDuplicateJsonName(raw)
-  if (duplicate !== null) return invalid(`The file contains the duplicate setting "${duplicate}".`)
+  if (duplicate !== null) return invalid('The file contains a duplicate setting.')
   try {
     const value: unknown = JSON.parse(raw)
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid('Use a JSON settings object.')
-    const record = value as Record<string, unknown>
-    if (Object.keys(record).some((key) => key !== 'apiKey' && key !== 's3'))
-      return invalid('The file contains an unknown setting.')
-    if (record.apiKey !== undefined && typeof record.apiKey !== 'string') return invalid('API key must be text.')
-    if (record.s3 !== undefined && (!record.s3 || typeof record.s3 !== 'object' || Array.isArray(record.s3))) {
-      return invalid('S3 settings must be an object.')
-    }
-    const s3 = record.s3 as Record<string, unknown> | undefined
-    if (
-      s3 &&
-      Object.keys(s3).some((key) => !['bucket', 'region', 'accessKeyId', 'secretAccessKey', 'endpoint'].includes(key))
-    ) {
-      return invalid('The file contains an unknown S3 setting.')
-    }
-    if (s3 && Object.values(s3).some((entry) => typeof entry !== 'string')) return invalid('S3 settings must be text.')
-    const s3Patch: Partial<SettingsSnapshot['s3']> = {}
-    if (s3) {
-      for (const key of ['bucket', 'region', 'accessKeyId', 'secretAccessKey', 'endpoint'] as const) {
-        if (typeof s3[key] === 'string') s3Patch[key] = s3[key]
-      }
-    }
-    const invalidValue = invalidProvidedValue(s3Patch)
-    if (invalidValue) return invalid(invalidValue)
-    return {
-      ok: true,
-      patch: {
-        ...(typeof record.apiKey === 'string' ? { apiKey: record.apiKey } : {}),
-        ...(s3 ? { s3: s3Patch } : {}),
-      },
-    }
+    return validateDocument(value)
   } catch {
     return invalid('The JSON file could not be read.')
+  }
+}
+
+function validateDocument(value: unknown): SettingsImportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid('Use a JSON settings object.')
+  const record = value as Record<string, unknown>
+  if (Object.keys(record).some((key) => key !== 'apiKey' && key !== 's3'))
+    return invalid('The file contains an unknown setting.')
+  if (record.apiKey !== undefined && typeof record.apiKey !== 'string') return invalid('API key must be text.')
+  if (record.s3 !== undefined && (!record.s3 || typeof record.s3 !== 'object' || Array.isArray(record.s3))) {
+    return invalid('S3 settings must be an object.')
+  }
+  const s3 = record.s3 as Record<string, unknown> | undefined
+  if (
+    s3 &&
+    Object.keys(s3).some((key) => !['bucket', 'region', 'accessKeyId', 'secretAccessKey', 'endpoint'].includes(key))
+  ) {
+    return invalid('The file contains an unknown S3 setting.')
+  }
+  if (s3 && Object.values(s3).some((entry) => typeof entry !== 'string')) return invalid('S3 settings must be text.')
+  const s3Patch: Partial<SettingsSnapshot['s3']> = {}
+  if (s3) {
+    for (const key of ['bucket', 'region', 'accessKeyId', 'secretAccessKey', 'endpoint'] as const) {
+      if (typeof s3[key] === 'string') s3Patch[key] = s3[key]
+    }
+  }
+  const invalidValue = invalidProvidedValue(s3Patch)
+  if (invalidValue) return invalid(invalidValue)
+  if (record.apiKey === undefined && Object.keys(s3Patch).length === 0) return invalid('The file contains no settings.')
+  return {
+    ok: true,
+    patch: {
+      ...(typeof record.apiKey === 'string' ? { apiKey: record.apiKey } : {}),
+      ...(s3 ? { s3: s3Patch } : {}),
+    },
   }
 }
 
@@ -192,7 +198,48 @@ export function parseSettingsImport(name: string, raw: string): SettingsImportRe
   if (new TextEncoder().encode(raw).byteLength > MAX_BYTES) return invalid('The selected file is larger than 1 MiB.')
   const content = raw.replace(/^\uFEFF/, '')
   if (content.trim() === '') return invalid('The selected file is empty.')
+  if (name.toLowerCase().endsWith('.toml')) {
+    try {
+      return validateDocument(parseSettingsToml(content))
+    } catch {
+      return invalid('The TOML file could not be read. Check syntax and duplicate settings.')
+    }
+  }
   if (name.toLowerCase().endsWith('.json')) return parseJson(content)
   if (name.toLowerCase().endsWith('.txt')) return parseText(content)
-  return invalid('Choose a JSON or text settings file.')
+  return invalid('Choose a TOML, JSON or text settings file.')
+}
+
+/** Validate bytes before decoding so malformed UTF-8 never becomes replacement text. */
+export function decodeSettingsFile(bytes: Uint8Array): string {
+  if (bytes.length > MAX_BYTES) throw new Error('The selected file is larger than 1 MiB.')
+  let result = ''
+  for (let i = 0; i < bytes.length;) {
+    const first = bytes[i++]!
+    let code = first
+    let count = 0
+    let minimum = 0
+    if (first >= 0xc2 && first <= 0xdf) {
+      count = 1
+      code = first & 0x1f
+      minimum = 0x80
+    } else if (first >= 0xe0 && first <= 0xef) {
+      count = 2
+      code = first & 0x0f
+      minimum = 0x800
+    } else if (first >= 0xf0 && first <= 0xf4) {
+      count = 3
+      code = first & 7
+      minimum = 0x10000
+    } else if (first > 0x7f) throw new Error('Use a UTF-8 settings file.')
+    for (let j = 0; j < count; j += 1) {
+      const next = bytes[i++]
+      if (next === undefined || (next & 0xc0) !== 0x80) throw new Error('Use a UTF-8 settings file.')
+      code = (code << 6) | (next & 0x3f)
+    }
+    if (code < minimum || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
+      throw new Error('Use a UTF-8 settings file.')
+    result += String.fromCodePoint(code)
+  }
+  return result
 }

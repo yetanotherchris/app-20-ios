@@ -1,3 +1,4 @@
+import { parseSettingsToml, serializeSettingsToml } from '../settings/settingsToml'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as SecureStore from 'expo-secure-store'
@@ -31,6 +32,7 @@ export interface SecretService {
   getProviderKey(): Promise<string | null>
   getS3Config(): Promise<S3Config | null>
   readSettings(): Promise<SettingsSnapshot>
+  commitSettings(apiKey: string, s3?: S3Config | null): Promise<void>
   saveApiKey(value: string): Promise<void>
   saveS3Config(config: S3Config | null): Promise<void>
 }
@@ -106,21 +108,108 @@ function emptySettings(): SettingsSnapshot {
   }
 }
 
+const SETTINGS_STORAGE_KEY = 'settingsToml'
+// All instances share the queue: a read cannot race a read/modify/write commit.
+let settingsQueue: Promise<unknown> = Promise.resolve()
+
+function serialized<T>(operation: () => Promise<T>): Promise<T> {
+  const next = settingsQueue.catch(() => undefined).then(operation)
+  settingsQueue = next
+  return next
+}
+
+function storedSnapshot(raw: string): SettingsSnapshot {
+  try {
+    const value = parseSettingsToml(raw)
+    const s3 = value.s3
+    if (typeof value.apiKey !== 'string' || !s3 || typeof s3 !== 'object' || Array.isArray(s3)) throw new Error()
+    const fields = s3 as Record<string, unknown>
+    const snapshot = emptySettings()
+    snapshot.apiKey = value.apiKey
+    for (const key of Object.keys(snapshot.s3) as Array<keyof SettingsSnapshot['s3']>) {
+      if (typeof fields[key] !== 'string') throw new Error()
+      snapshot.s3[key] = fields[key]
+    }
+    return snapshot
+  } catch {
+    // Never include parser source excerpts or credential values in diagnostics.
+    throw new Error('Protected settings could not be loaded.')
+  }
+}
+
+async function writeSnapshot(snapshot: SettingsSnapshot): Promise<void> {
+  await SecureStore.setItemAsync(SETTINGS_STORAGE_KEY, serializeSettingsToml({ ...snapshot }))
+}
+
+async function readSnapshot(): Promise<SettingsSnapshot> {
+  const current = await SecureStore.getItemAsync(SETTINGS_STORAGE_KEY)
+  if (current !== null) return storedSnapshot(current)
+  const [apiKey, s3] = await Promise.all([
+    SecureStore.getItemAsync(PROVIDER_KEY_STORAGE_KEY),
+    SecureStore.getItemAsync(S3_STORAGE_KEY),
+  ])
+  const snapshot = emptySettings()
+  snapshot.apiKey = apiKey ?? '' // Migration must preserve the raw API key exactly.
+  if (s3 !== null) {
+    const legacy = parseObject(s3)
+    if (!legacy) throw new Error('Protected legacy settings could not be loaded.')
+    for (const key of Object.keys(snapshot.s3) as Array<keyof SettingsSnapshot['s3']>) {
+      if (legacy[key] !== undefined && typeof legacy[key] !== 'string')
+        throw new Error('Protected legacy settings could not be loaded.')
+      snapshot.s3[key] = typeof legacy[key] === 'string' ? legacy[key] : ''
+    }
+  }
+  try {
+    await writeSnapshot(snapshot)
+  } catch {
+    // Legacy records remain authoritative and recoverable; the next read retries.
+  }
+  return snapshot
+}
+
+function snapshotConfig(snapshot: SettingsSnapshot): S3Config | null {
+  const config = snapshot.s3
+  if (!config.accessKeyId || !config.secretAccessKey) return null
+  return parseS3Config(
+    JSON.stringify({
+      ...config,
+      endpoint: config.endpoint || undefined,
+    }),
+  )
+}
+
 export function createSecretService(): SecretService {
-  async function importSecret(kind: SecretKind): Promise<SecretResult> {
-    const picker = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
+  async function commitSettings(apiKey: string, s3?: S3Config | null): Promise<void> {
+    await serialized(async () => {
+      const snapshot = await readSnapshot()
+      snapshot.apiKey = apiKey
+      if (s3 !== undefined) snapshot.s3 = s3 === null ? emptySettings().s3 : { ...s3, endpoint: s3.endpoint ?? '' }
+      await writeSnapshot(snapshot)
     })
+  }
+
+  async function importSecret(kind: SecretKind): Promise<SecretResult> {
+    const picker = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false })
     if (picker.canceled) return { ok: false, code: 'chooser-cancelled' }
     const asset = picker.assets[0]
     if (!asset) return { ok: false, code: 'unknown' }
-
     try {
-      const raw = await FileSystem.readAsStringAsync(asset.uri)
+      let raw: string
+      try {
+        raw = await FileSystem.readAsStringAsync(asset.uri)
+      } finally {
+        if (FileSystem.cacheDirectory && asset.uri.startsWith(`${FileSystem.cacheDirectory}DocumentPicker/`)) {
+          await FileSystem.deleteAsync(asset.uri, { idempotent: true })
+        }
+      }
       const normalized = kind === 'provider-key' ? validateProviderKey(raw) : validateS3(raw)
       if (!normalized) return invalid()
-      await SecureStore.setItemAsync(kind === 'provider-key' ? PROVIDER_KEY_STORAGE_KEY : S3_STORAGE_KEY, normalized)
+      await serialized(async () => {
+        const snapshot = await readSnapshot()
+        if (kind === 'provider-key') snapshot.apiKey = normalized
+        else snapshot.s3 = { ...emptySettings().s3, ...JSON.parse(normalized) }
+        await writeSnapshot(snapshot)
+      })
       return { ok: true }
     } catch {
       return { ok: false, code: 'unknown' }
@@ -129,41 +218,28 @@ export function createSecretService(): SecretService {
 
   return {
     async hasProviderKey() {
-      return (await SecureStore.getItemAsync(PROVIDER_KEY_STORAGE_KEY)) !== null
+      return (await serialized(readSnapshot)).apiKey !== ''
     },
     import: importSecret,
     async getProviderKey() {
-      return SecureStore.getItemAsync(PROVIDER_KEY_STORAGE_KEY)
+      return (await serialized(readSnapshot)).apiKey || null
     },
     async getS3Config() {
-      return parseS3Config(await SecureStore.getItemAsync(S3_STORAGE_KEY))
+      return snapshotConfig(await serialized(readSnapshot))
     },
-    async readSettings() {
-      const [apiKey, s3] = await Promise.all([
-        SecureStore.getItemAsync(PROVIDER_KEY_STORAGE_KEY),
-        SecureStore.getItemAsync(S3_STORAGE_KEY),
-      ])
-      const snapshot = emptySettings()
-      snapshot.apiKey = apiKey ?? ''
-      const config = parseS3Config(s3)
-      if (config) {
-        snapshot.s3 = {
-          accessKeyId: config.accessKeyId,
-          secretAccessKey: config.secretAccessKey,
-          bucket: config.bucket,
-          region: config.region,
-          endpoint: config.endpoint ?? '',
-        }
-      }
-      return snapshot
+    readSettings() {
+      return serialized(readSnapshot)
     },
+    commitSettings,
     async saveApiKey(value) {
-      if (value === '') await SecureStore.deleteItemAsync(PROVIDER_KEY_STORAGE_KEY)
-      else await SecureStore.setItemAsync(PROVIDER_KEY_STORAGE_KEY, value)
+      await commitSettings(value)
     },
     async saveS3Config(config) {
-      if (config === null) await SecureStore.deleteItemAsync(S3_STORAGE_KEY)
-      else await SecureStore.setItemAsync(S3_STORAGE_KEY, JSON.stringify(config))
+      await serialized(async () => {
+        const snapshot = await readSnapshot()
+        snapshot.s3 = config === null ? emptySettings().s3 : { ...config, endpoint: config.endpoint ?? '' }
+        await writeSnapshot(snapshot)
+      })
     },
   }
 }

@@ -1,12 +1,15 @@
 ---
-name: "speckit-tasks"
-description: "Generate an actionable, dependency-ordered tasks.md for the feature based on available design artifacts."
-compatibility: "Requires spec-kit project structure with .specify/ directory"
+name: 'speckit-tasks'
+description: 'Generate an actionable, dependency-ordered tasks.md for the feature based on available design artifacts.'
+compatibility: 'Requires spec-kit project structure with .specify/ directory'
 metadata:
-  author: "github-spec-kit"
-  source: "templates/commands/tasks.md"
+  author: 'github-spec-kit'
+  source: 'templates/commands/tasks.md'
 ---
 
+## Repository workflow requirements
+
+Before executing this skill, read `AGENTS.md` at the repository root. Follow its stage-specific review, remediation, validation, and archive requirements. In a combined workflow, continue through the authorized stages rather than treating a stage completion report as completion of the entire request.
 
 ## User Input
 
@@ -19,6 +22,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before tasks generation)**:
+
 - Check if `.specify/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_tasks` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
@@ -91,6 +95,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 **You MUST complete this section before reporting completion to the user.**
 
 Check if `.specify/extensions.yml` exists in the project root.
+
 - If it does not exist, or no hooks are registered under `hooks.after_tasks`, skip to the Completion Report.
 - If it exists, read it and look for entries under the `hooks.after_tasks` key.
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue to the Completion Report.
@@ -124,6 +129,7 @@ Check if `.specify/extensions.yml` exists in the project root.
 ## Completion Report
 
 Output path to generated tasks.md and summary:
+
 - Total task count
 - Task count per user story
 - Parallel opportunities identified
@@ -134,6 +140,10 @@ Output path to generated tasks.md and summary:
 Context for task generation: $ARGUMENTS
 
 The tasks.md should be immediately executable - each task must be specific enough that an LLM can complete it without additional context.
+
+## Repository final-phase tasks
+
+Include explicit tasks for the independent implementation reviews, remediation and reviewer verification, validation/review record, and archiving/link repair required by root `AGENTS.md`. These tasks belong after implementation and before PR readiness; they must not be treated as optional polish.
 
 ## Task Generation Rules
 

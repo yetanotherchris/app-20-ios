@@ -1,0 +1,10 @@
+# Omit fields to preserve their current draft values.
+apiKey = "YOUR_PROVIDER_API_KEY"
+
+[s3]
+bucket = "my-conversations"
+region = "eu-west-2"
+accessKeyId = "YOUR_S3_ACCESS_KEY_ID"
+secretAccessKey = "YOUR_S3_SECRET_ACCESS_KEY"
+# Optional S3-compatible endpoint; empty uses the AWS default.
+endpoint = ""

@@ -8,6 +8,6 @@ appId: com.app20.chat
 - tapOn: Open conversations
 - tapOn: Settings
 - assertVisible: Endpoint URL
-- tapOn: Import from JSON file
+- tapOn: Import from TOML file
 - assertVisible: Cancel
 - tapOn: Cancel
