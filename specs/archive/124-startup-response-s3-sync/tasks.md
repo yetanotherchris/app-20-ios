@@ -57,4 +57,4 @@ T001 gates coding. T002–T004 precede US1, US1 precedes US2, US3 completes shar
 
 - [x] T026 Add native Maestro sync scenario flows and explicit fixture/backend verification instructions in tests/e2e/sync; record unavailable device acceptance.
 - [x] T027 Complete all five independent final-diff reviews, remediate findings and obtain verification; update review.md.
-- [ ] T028 Publish review reports and disposition replies to PR #3, update its description and inspect GitHub checks.
+- [x] T028 Publish review reports and disposition replies to PR #3, update its description and inspect GitHub checks.
