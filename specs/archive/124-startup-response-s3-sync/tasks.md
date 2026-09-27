@@ -52,3 +52,9 @@ T001 gates coding. T002–T004 precede US1, US1 precedes US2, US3 completes shar
 - [x] T023 Fix completed-history saves, active-work replacement races, partial-import metadata, deletion retry and concurrent S3 writes; add regression tests in tests/chat and tests/sync.
 - [x] T024 Obtain independent verification of final fixes and complete automated checks; record reviewed diff and limitations in review.md.
 - [x] T025 Commit and push reviewed remediation to the existing authorized PR #3 and update its validation description.
+
+## Continuation of PR review gate
+
+- [x] T026 Add native Maestro sync scenario flows and explicit fixture/backend verification instructions in tests/e2e/sync; record unavailable device acceptance.
+- [x] T027 Complete all five independent final-diff reviews, remediate findings and obtain verification; update review.md.
+- [ ] T028 Publish review reports and disposition replies to PR #3, update its description and inspect GitHub checks.

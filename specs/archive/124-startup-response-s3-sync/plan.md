@@ -19,7 +19,7 @@ Add a destination-bound durable reconciliation coordinator around local conversa
 
 ## Constitution Check
 
-The constitution is an unratified placeholder, so imposes no concrete additional principles. Root AGENTS.md governs review, preservation, validation and archiving. Pre-design and post-design gates pass: preserve existing work, independent planning review before coding, three independent implementation reviews, npm S3 validation and explicit device limits.
+The constitution is an unratified placeholder, so imposes no concrete additional principles. Root AGENTS.md governs review, preservation, validation and archiving. Pre-design and post-design gates pass: preserve existing work, independent planning review before coding, five independent implementation reviews covering correctness/regressions, requirements/acceptance, security/privacy, code quality and tests, npm S3 validation and explicit device limits.
 
 ## Project Structure
 
