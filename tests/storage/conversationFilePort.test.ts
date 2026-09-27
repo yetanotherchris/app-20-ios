@@ -53,3 +53,18 @@ describe('createConversationFilePort', () => {
     await expect(port.deleteText('../secret.json')).rejects.toThrow('Invalid conversation file name')
   })
 })
+
+it.each([
+  '%2e%2e%2fsync%2freconciliation.json',
+  'manifest.json%23x.json',
+  'a?x.json',
+  'a#x.json',
+  '.json',
+  'a\u0000.json',
+])('rejects URI-sensitive imported name %s', async (name) => {
+  const fileSystem = createFileSystem()
+  await expect(createConversationFilePort(fileSystem).writeText(name, '{}')).rejects.toThrow(
+    'Invalid conversation file name',
+  )
+  expect(fileSystem.writeAsStringAsync).not.toHaveBeenCalled()
+})

@@ -24,6 +24,7 @@ export interface Conversation {
   createdAt: string
   updatedAt: string
   draft?: string
+  selectionProvenance?: Record<string, unknown>
   messages: ConversationMessage[]
 }
 
@@ -70,6 +71,7 @@ export function serializeConversation(conversation: Conversation): string {
     updatedAt: conversation.updatedAt,
   }
   if (conversation.draft !== undefined) output.draft = conversation.draft
+  if (conversation.selectionProvenance !== undefined) output.selectionProvenance = conversation.selectionProvenance
   output.messages = conversation.messages.map(serializeMessage)
   return JSON.stringify(output, null, 2)
 }
@@ -104,13 +106,14 @@ function parseMessage(value: unknown): ConversationMessage | null {
  */
 export function parseConversation(value: unknown): Conversation | null {
   if (!isRecord(value)) return null
-  const { id, title, model, createdAt, updatedAt, draft, messages } = value
+  const { id, title, model, createdAt, updatedAt, draft, messages, selectionProvenance } = value
   if (typeof id !== 'string' || typeof title !== 'string' || typeof updatedAt !== 'string') {
     return null
   }
   if (model !== undefined && typeof model !== 'string') return null
   if (createdAt !== undefined && typeof createdAt !== 'string') return null
   if (draft !== undefined && typeof draft !== 'string') return null
+  if (selectionProvenance !== undefined && !isRecord(selectionProvenance)) return null
   if (!Array.isArray(messages)) return null
 
   const parsedMessages: ConversationMessage[] = []
@@ -129,6 +132,7 @@ export function parseConversation(value: unknown): Conversation | null {
     messages: parsedMessages,
   }
   if (draft !== undefined) conversation.draft = draft
+  if (isRecord(selectionProvenance)) conversation.selectionProvenance = selectionProvenance
   return conversation
 }
 

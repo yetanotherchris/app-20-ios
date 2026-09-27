@@ -134,20 +134,20 @@ describe('syncOnce corrupt and empty objects', () => {
     const report = await syncOnce(local, remote)
 
     expect(report.skipped).toBe(1)
-    expect(report.uploaded).toBe(1)
-    expect(remote.objects.get('f.json')).toBe(raw(localConversation))
+    expect(report.uploaded).toBe(0)
+    expect(remote.objects.get('f.json')).toBe('{ not json')
     expect(local.files.get('f.json')).toBe(raw(localConversation))
   })
 
-  it('repairs an empty remote object from the valid local copy', async () => {
+  it('holds an empty remote object rather than repairing automatically', async () => {
     const localConversation = conversation('g', '2026-01-02T00:00:00.000Z')
     const local = createInMemoryLocalPort({ 'g.json': raw(localConversation) })
     const remote = createInMemorySyncRemote({ 'g.json': '' })
 
     const report = await syncOnce(local, remote)
 
-    expect(report.uploaded).toBe(1)
-    expect(remote.objects.get('g.json')).toBe(raw(localConversation))
+    expect(report.uploaded).toBe(0)
+    expect(remote.objects.get('g.json')).toBe('')
   })
 
   it('leaves a corrupt local file untouched and does not download over it', async () => {

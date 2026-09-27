@@ -1,17 +1,127 @@
-# Repository instructions
+# AGENTS.md
 
-## Speckit workflow and completion
+Guidance for AI agents working in this repository. This project is built spec-first using Spec Kit. Specifications describe the intended behavior; existing code is precedent, not proof that behavior is correct. Read this file before making changes or running a Speckit skill.
 
-Read this file before running any speckit skill. These repository rules supplement the local skills and apply to combined plan/task/implement requests as well as individual stages. An implementation request authorizes the independent review agents described below; run them automatically without asking again.
+## Required PR reviews
 
-- Planning and task generation: resolve the requested feature explicitly, read its spec, and generate the design artifacts and tasks. Before implementation, use an independent agent to review spec/plan/tasks consistency and testable coverage. Resolve actionable gaps before coding. Include implementation review, remediation, validation, and archive work in tasks.md.
-- Implementation: execute the tasks and appropriate automated checks. Then run independent read-only agents for (1) code correctness/regressions and (2) requirements/acceptance coverage. Add a separate security/privacy review when the change handles credentials, persistence, authentication, or external data. Review agents should inspect the actual final diff and spec, report concrete file/line findings and severity, and identify verification limits. Do not substitute a planning research agent or the implementing agent's own review for these reviews.
-- Remediation: assess every finding, fix applicable defects, add meaningful regression coverage, and rerun affected checks. Ask the relevant reviewer to verify fixes. Continue until no actionable findings remain; record accepted non-defects with rationale. If required reviews or checks cannot run, report the exact missing step and do not describe the workflow as complete or the PR as ready.
-- Record reviews and validation in the feature's review.md (review roles, findings, resolution, final reviewed commit or diff, checks, and unverified acceptance). Keep tasks.md accurate; passing unit tests does not mean device acceptance passed.
-- Archive after implementation and review remediation are complete: move the entire feature directory from specs/<feature>/ to specs/archive/<feature>/, set spec.md Status to Archived, and repair relative links within the moved artifacts and references from other live specs/docs. Preserve all design artifacts, checklists, tasks and review records. Update the selected local feature context if needed. Planning/task generation alone must not archive a feature. Do not archive unfinished implementation; document unavailable environment checks explicitly.
-- PR readiness: complete the reviews, fixes, checks, review record and archive before creating the requested PR. When updating an existing PR, apply the same gates to its final changes. Only create/push a PR when authorized by the user; these workflow rules do not authorize merging, deployment, publication, or messages to others.
-- Final report: link the PR when created, identify the archived spec, state which independent reviews ran and which checks passed, and disclose unverified acceptance. Distinguish implementation completion from acceptance that needs unavailable device tooling.
+After an implementation PR is created or updated and before merging, spawn five independent read-only subagents covering correctness and regressions, requirements and acceptance coverage, security/privacy, code quality, and tests. An implementation PR request authorizes these reviews, their GitHub comments and finding-disposition replies without another permission question. Limited concurrency is a reason to run reviews sequentially, not omit roles.
 
-## Working tree and environment
+Reviewers must inspect the actual final diff and applicable specification, report concrete file/line findings with severity, identify checks performed, and state verification limits. A planning research agent or the implementing agent's own review does not replace these reviews. Post each independent reviewer's full report directly as a comment on the GitHub PR, including reports with no actionable findings. Attribute the report to its reviewer role rather than implying the posting account performed the review. Include the reviewed diff or commit, findings, checks and verification limits in the comment itself. Do not create repository review files or make readers follow a link to obtain a report.
 
-Preserve unrelated user changes and stage only the authorized work. Use Linux PowerShell (`pwsh`) for .specify/scripts/powershell helpers in WSL; resolve feature paths from the selected context rather than assuming the branch name is sufficient.
+Wait for all required reports. Assess every finding, fix critical and major findings, add meaningful regression coverage, rerun affected checks and ask the relevant reviewer to verify fixes. Minor findings should be fixed; a deliberately deferred minor finding requires a rationale in its reply. Nits may be fixed or acknowledged. Reply to every report with its disposition: fix commit hashes and reviewer verification for fixed issues, rationale for non-defects or deferred suggestions, or "no action needed". Keep tasks.md accurate. Record review findings, resolutions, checks and verification limits in the PR discussion, not a feature review.md or a file under docs/reviews/.
+
+Each report and PR description must end with a single `Generated by <model name>.` line using the actual model that generated it, not the tool name. Never invent an unavailable model identity.
+
+Documentation-only and specification-only changes require exactly one independent read-only artifact-compliance review, not five implementation reviews. Apply the same GitHub reporting, remediation, verification and disposition requirements. Mixed code/documentation implementation PRs require the five roles; a later documentation-only correction does not require repeating completed implementation reviews unless it changes implementation requirements or invalidates their conclusions.
+
+Do not describe a PR as ready while required reviews, actionable critical or major findings, or required checks remain outstanding. If subagents or required checks are unavailable, report the exact blocker. Passing unit tests does not establish device acceptance. Publication still requires user authorization and merging still requires explicit authorization for that PR in the current session.
+
+## What this project is
+
+An iOS AI chat application built with Expo, React Native, and TypeScript. It includes provider integration, local conversation storage, protected settings, and optional S3 synchronization. Read `README.md`, `package.json`, and the selected feature artifacts for the current stack and commands. Do not import Electron architecture, browser testing assumptions, or another repository's design decisions into this app.
+
+## Authority order
+
+Explicit user instructions and the session's governing instructions take precedence over repository documents. Within repository guidance, higher wins:
+
+1. `.specify/memory/constitution.md`: ratified project principles.
+2. The selected feature's `spec.md`: what to build and why.
+3. Its `plan.md` and `research.md`: how to build it.
+4. Its `tasks.md`: order of work.
+5. This file: working practice.
+6. Applicable documented coding standards, when present.
+7. Existing code: precedent, not authority.
+
+The constitution currently contains template placeholders. Do not treat examples or placeholder principles as ratified rules, or silently invent replacements. Report that limitation when relevant; constitution changes are a separate explicit workflow. Code that contradicts the spec indicates a code defect or a spec defect. Diagnose which before changing behavior.
+
+## Spec Kit workflow
+
+`constitution → specify → clarify → plan → tasks → analyze → implement`
+
+Use the repository's skills under `.agents/skills/speckit-*/SKILL.md` and read the selected skill before applying it. These are the installed workflows for this repository; do not assume OpenCode slash commands or `.opencode/commands/` exist. Use Linux PowerShell (`pwsh`) for `.specify/scripts/powershell` helpers in WSL. Resolve the requested feature explicitly from the selected context, including archived paths when updating completed work; branch names alone are insufficient.
+
+| Stage        | Artifacts or result                                                                 | Purpose                                 |
+| ------------ | ----------------------------------------------------------------------------------- | --------------------------------------- |
+| Constitution | `.specify/memory/constitution.md`                                                   | Project principles.                     |
+| Specify      | `spec.md`                                                                           | User requirements and rationale.        |
+| Clarify      | Clarifications in `spec.md`                                                         | Resolve material ambiguity.             |
+| Plan         | `plan.md`, `research.md`, `data-model.md`, contracts, `quickstart.md` as applicable | Technical design and evidence.          |
+| Tasks        | `tasks.md`                                                                          | Ordered, independently verifiable work. |
+| Analyze      | Consistency findings                                                                | Check artifacts before implementation.  |
+| Implement    | Code, tests, accurate tasks and PR review comments                                  | Execute and verify the agreed work.     |
+
+Do not skip required artifacts because the feature seems obvious. Reuse valid existing artifacts rather than regenerating them unnecessarily. Specs describe behavior and constraints, not chosen implementation libraries; plans must not quietly introduce new requirements. Keep artifacts current when decisions change.
+
+For combined plan/task/implement requests, read the requested spec, produce the design artifacts and tasks, then use an independent agent to review spec/plan/tasks consistency and testable coverage before coding. Resolve actionable gaps. Include implementation reviews, remediation, validation, and archive work in `tasks.md`.
+
+## When something is wrong
+
+Diagnose the layer before fixing it:
+
+| Symptom                                                         | Fix location                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Missing case, ambiguous wording, or conflicting requirements    | `spec.md`; clarify material choices.                                           |
+| Requirement conflicts with a ratified principle                 | Amend the spec to satisfy the constitution or explicitly resolve the conflict. |
+| Sound requirement, failed technical approach or unsupported API | `plan.md`, with evidence in `research.md`.                                     |
+| Work item too large, missing, or badly ordered                  | `tasks.md`.                                                                    |
+| Artifacts agree, implementation differs                         | Code and regression coverage.                                                  |
+
+Proceed with a reasonable, reversible default when it does not change user-visible scope, security, or data-loss behavior. Record behavioral assumptions in the spec's `Assumptions` section and technical choices in the plan or research decision log. Mention material assumptions in the final report.
+
+Ask when an unresolved choice changes scope, invents user-visible behavior, contradicts a requirement, risks data loss, changes security/path safety, or substantially increases cost. First read existing artifacts and session authorization; do not re-ask decisions already made or seek approval for routine fixes within the authorized scope. Present concrete options, their consequences, and your recommendation. Continue independent work while awaiting an answer when possible.
+
+Never silently weaken validation, remove or skip meaningful tests to get green, bypass required confirmations, swallow failures as successes, implement forbidden behavior, or claim stubbed work is complete. A failing data-loss or containment test is evidence of a defect until investigated. Do not downgrade a requirement merely because implementation is difficult.
+
+Record every departure in the appropriate artifact: changed requirements in `spec.md`, dated ambiguity resolutions in `Clarifications`, changed technical decisions in `plan.md` with evidence in `research.md`, deliberate principle exceptions in `Complexity Tracking`, and newly discovered work as new tasks. Code comments alone are not a deviation record.
+
+## Data and privacy safeguards
+
+Follow the selected specs and storage/security contracts. Keep credentials in the existing protected storage path, exclude secrets and private conversation content from logs and review reports, and preserve unrelated local or remote revisions during synchronization. Failed saves or sync attempts must retain recoverable work and report their actual state. Never discard unsaved user work without the confirmation or recovery behavior required by the spec. Do not broaden filesystem access, filename validation, or remote overwrite behavior to accommodate a failing test.
+
+## Repository layout
+
+| Path                              | Purpose                                         |
+| --------------------------------- | ----------------------------------------------- |
+| `.specify/memory/constitution.md` | Constitution, currently an unratified template. |
+| `.specify/scripts/powershell/`    | Feature workflow helpers.                       |
+| `.agents/skills/`                 | Installed Spec Kit skills.                      |
+| `specs/`                          | Active feature artifacts.                       |
+| `specs/archive/`                  | Completed feature artifacts.                    |
+| `src/`                            | Application modules.                            |
+| `tests/`                          | Vitest tests and supporting fixtures.           |
+| `tests/e2e/`                      | Maestro iOS acceptance flows.                   |
+| `docs/`                           | Supporting documentation and examples.          |
+
+## Working practice and validation
+
+Preserve unrelated user changes and stage only authorized work. Verify APIs and dependency behavior through installed types, documentation, or executable checks before asserting them. Prefer reading an artifact over asking a question already answered there. Keep fixes scoped; report unrelated problems without opportunistically changing them.
+
+Separate unrelated cleanup and behavior changes into distinct commits. Pure renaming, movement, or reorganization should not be mixed with feature behavior. Keep directly necessary changes together when splitting them would leave a broken intermediate state. Comments should explain a local constraint or non-obvious behavior, not restate code, requirement IDs, or project history.
+
+Write plain prose without filler, slogans, em dashes, or invented labels. Use flowing Markdown paragraphs rather than manual 80-column wraps. Match source formatting, aim for 100–120 columns, and use the repository formatter. Use small exact fixtures when assertions depend on their bytes; do not install a filler-text generator merely for ordinary test prose.
+
+For each feature adding user-visible behavior, add or update meaningful Maestro acceptance flows in `tests/e2e/` for its scenarios, and run `npm run test:e2e` against an installed iOS build when device/simulator tooling is available. Browser/jsdom tests cannot substitute for native UI, filesystem, lifecycle, or data-protection acceptance. If the environment cannot run Maestro, record the exact missing tooling and unverified scenarios. Implementation may be complete with disclosed unavailable device acceptance, but do not claim full acceptance or that all required readiness checks passed.
+
+Run applicable `npm run lint`, `npm run typecheck`, `npm run test`, formatting checks, and acceptance checks. Rerun affected checks after remediation. Do not add tests that merely mirror implementation or repeat checks without a new change or unresolved concern. Use npm `s3rver` for real HTTP S3 integration when testing sync, and state emulator limitations; passing emulator tests does not establish unsupported production backend behavior.
+
+For documentation/specification-only work, automated app tests are normally unnecessary. Verify artifact consistency, links, commands, and formatting instead, and state that explicitly. Report stubs, partial work, missing reviews, failed checks, and unavailable acceptance honestly.
+
+## Branching, archive, and PR workflow
+
+Create a task branch before edits; never implement or commit directly on `main`. Use `spec-<N>-<name>` for new spec implementations and a descriptive branch for other work. Continue the existing branch when updating its PR rather than creating a replacement PR. Preserve a dirty user workspace; use an isolated checkout or worktree when needed instead of resetting or stashing unrelated work without authorization. A phase groups tasks within one spec; it is not a branch or PR name. Commit coherent completed work, keeping unrelated cleanup separate.
+
+Only push or create/update a PR when authorized by the user. An implementation request alone authorizes the review workflow, not PR publication. Once PR work is authorized, the required review reports and finding-disposition replies are authorized as part of it. No unrelated messages, deployment, or publication outside the PR is authorized.
+
+Archive the completed implementation as part of its implementation PR, after implementation is complete: move the entire directory from `specs/<feature>/` to `specs/archive/<feature>/`, set `spec.md` status to `Archived`, repair relative links and references from live specs/docs, and update selected local feature context when necessary. Preserve all design artifacts, checklists and tasks. Review reports and dispositions remain in the PR discussion. Planning/task generation alone must not archive a feature. Do not archive unfinished implementation; document unavailable environment acceptance separately.
+
+After fixes and reviews, inspect GitHub checks with `gh pr checks <number>`. Wait for in-progress checks, treating failures as blocking. This repository currently has no `.github` CI workflow; do not claim a specific CI gate exists. No checks configured is distinct from checks passed. If checks are present later, inspect the actual configuration and results. Do not describe the PR as ready while required reviews/checks are missing or failed.
+
+Never merge a PR without explicit authorization for that specific PR in the current session. When gates pass, report readiness and stop; the user decides whether to merge. Do not infer merging or deployment permission from review completion.
+
+Use `feat(spec-N): <description>` for feature PR titles. Keep the model attribution in the description, not the title. The final report must link the PR when created, identify the archived spec, state review roles and passed checks, and disclose unverified acceptance separately from implementation completion.
+
+### Pull request descriptions
+
+Use `## Summary`, `## Changes`, and `## Testing`. Keep Summary to a short paragraph describing the resulting behavior and its purpose. Under Changes, use descriptive category headings only when helpful and flat bullets with concrete effects. Under Testing, list each check and result, including unavailable acceptance. For documentation/specification-only changes, state `Not run (documentation/specification-only change)` for app tests and name the manual validation.
+
+Write each paragraph on one line with blank lines between blocks. End with a single `Generated by <model name>.` line naming the actual model. Use `gh pr create --body-file <path>` or `gh pr edit --body-file <path>` for multiline bodies. If CLI editing fails due to GraphQL, use `gh api --method PATCH` with a JSON input file containing actual newline characters. Retrieve the stored body afterward through the API and verify headings, bullets, blank lines, and attribution, correcting formatting before reporting readiness.

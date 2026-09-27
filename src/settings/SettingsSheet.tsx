@@ -364,6 +364,9 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
           </View>
           <Text style={styles.section}>S3 Keys</Text>
           <Text style={styles.helper}>
+            Changing the bucket, region or endpoint syncs all eligible chats on this device to the new destination.
+          </Text>
+          <Text style={styles.helper}>
             {s3Configured
               ? 'Chats save on this device and to S3.'
               : 'Optional. Without S3 keys, chats save on this device.'}

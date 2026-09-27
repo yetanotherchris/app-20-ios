@@ -1,0 +1,28 @@
+appId: com.app20.chat
+env:
+  HOLD_MESSAGE: Conversation sync is held. Choose which copy to keep.
+  CHOICE: Keep local
+  EXPECTED_RESPONSE: Local fixture response
+---
+- launchApp
+- extendedWaitUntil:
+    visible: ${HOLD_MESSAGE}
+    timeout: 30000
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: ${HOLD_MESSAGE}
+    timeout: 30000
+- tapOn: Open conversations
+- tapOn: Sync held fixture
+- tapOn: ${CHOICE}
+- extendedWaitUntil:
+    notVisible: ${HOLD_MESSAGE}
+    timeout: 30000
+- assertVisible: ${EXPECTED_RESPONSE}
+- stopApp
+- launchApp
+- assertNotVisible: ${HOLD_MESSAGE}
+- tapOn: Open conversations
+- tapOn: Sync held fixture
+- assertVisible: ${EXPECTED_RESPONSE}

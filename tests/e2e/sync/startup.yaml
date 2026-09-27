@@ -1,0 +1,15 @@
+appId: com.app20.chat
+---
+- launchApp
+- tapOn: Open conversations
+- assertVisible: Sync local fixture
+- extendedWaitUntil:
+    visible: Sync remote fixture
+    timeout: 30000
+- tapOn: Sync remote fixture
+- assertVisible: Remote fixture response
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Sync remote fixture
+- assertVisible: Remote fixture response

@@ -67,3 +67,39 @@ describe('toConversation ordering', () => {
     expect(conversation.updatedAt).toBe('2026-09-10T11:00:00.000Z')
   })
 })
+
+it('does not persist an in-progress response as successfully completed', () => {
+  const streaming: Message = { ...userMessage('a', base.updatedAt), role: 'assistant', status: 'streaming' }
+  const conversation = toConversation(
+    { id: 'c1', createdAt: base.createdAt, model: '', messages: [streaming], draft: '' },
+    base,
+  )
+  expect(conversation.messages[0]?.status).toBe('stopped')
+})
+
+it('retains hidden tool records and optional selection provenance during ordinary local saves', () => {
+  const tool = {
+    id: 'tool',
+    role: 'tool' as const,
+    content: 'tool result',
+    createdAt: base.updatedAt,
+    status: 'complete' as const,
+  }
+  const rich = {
+    ...base,
+    messages: [base.messages[0]!, tool],
+    selectionProvenance: { endpoint: 'https://provider.example' },
+  }
+  const result = toConversation(
+    {
+      id: base.id,
+      createdAt: base.createdAt,
+      model: base.model,
+      messages: [userMessage('m1', base.updatedAt)],
+      draft: 'edit',
+    },
+    rich,
+  )
+  expect(result.messages[1]).toEqual(tool)
+  expect(result.selectionProvenance).toEqual(rich.selectionProvenance)
+})

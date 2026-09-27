@@ -10,6 +10,10 @@ export const MANIFEST_VERSION = 1 as const
 export function isConversationFileName(name: string): boolean {
   return (
     name !== MANIFEST_FILE_NAME &&
+    name.length > CONVERSATION_FILE_EXTENSION.length &&
+    !name.startsWith('.') &&
+    !Array.from(name).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) &&
+    !/[%?#:]/.test(name) &&
     name.endsWith(CONVERSATION_FILE_EXTENSION) &&
     !name.includes('/') &&
     !name.includes('\\')

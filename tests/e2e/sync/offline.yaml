@@ -1,0 +1,17 @@
+appId: com.app20.chat
+---
+- launchApp
+- extendedWaitUntil:
+    visible: Retry syncing history
+    timeout: 30000
+- tapOn: Open conversations
+- tapOn: Sync local fixture
+- assertVisible: Local fixture response
+- tapOn: Retry syncing history
+- extendedWaitUntil:
+    visible: Retry syncing history
+    timeout: 30000
+- assertVisible: Local fixture response
+- tapOn: Ask anything
+- inputText: Offline draft remains editable
+- assertVisible: Offline draft remains editable

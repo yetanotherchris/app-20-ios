@@ -2,9 +2,9 @@
 
 **Feature Branch**: `spec-121-124-settings-models-s3`
 **Created**: 2026-09-26
-**Status**: Draft
+**Status**: Archived
 **Input**: User description: "Sync conversations from S3 on app startup when S3 keys exist, and sync to S3 each time a response is received."
-**Depends on**: [112 Settings and Credentials](../archive/112-ios-settings-credentials/spec.md), [116 Durable Local-First S3 Mirror](../archive/116-local-first-s3-feedback/spec.md)
+**Depends on**: [112 Settings and Credentials](../112-ios-settings-credentials/spec.md), [116 Durable Local-First S3 Mirror](../116-local-first-s3-feedback/spec.md)
 
 ## Purpose
 

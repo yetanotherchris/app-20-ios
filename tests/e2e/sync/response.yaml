@@ -1,0 +1,25 @@
+appId: com.app20.chat
+---
+- launchApp
+- tapOn: New chat
+- tapOn: Ask anything
+- inputText: Sync response fixture
+- tapOn: Send message
+- extendedWaitUntil:
+    visible: Fixture response one
+    timeout: 30000
+- tapOn: 'Edit and resend message: Sync response fixture'
+- tapOn: Ask anything
+- eraseText
+- inputText: Sync edited fixture
+- tapOn: Send message
+- extendedWaitUntil:
+    visible: Fixture response two
+    timeout: 30000
+- assertNotVisible: Fixture response one
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Sync response fixture
+- assertVisible: Fixture response two
+- assertNotVisible: Fixture response one

@@ -221,7 +221,7 @@ Check if `.specify/extensions.yml` exists in the project root.
 
 ## Repository completion gate
 
-Before the completion report, run the independent code and requirements review agents required by root `AGENTS.md`, plus the conditional security/privacy review. Resolve findings, obtain follow-up verification, update the feature review record and tasks, rerun affected checks, and archive the completed spec with repaired links. Complete this gate before creating a requested PR or claiming implementation workflow completion.
+Follow root `AGENTS.md` for archiving, publication authorization and the required PR reviews. After publishing an authorized implementation PR, run all five independent review roles and post each full report directly as a PR comment. Resolve findings, obtain reviewer verification, reply with dispositions and fix commit hashes, update tasks and rerun affected checks before reporting readiness. Do not create a feature review.md or repository review record. Without publication authorization, report completed local work and outstanding PR reviews without publishing.
 
 ## Completion Report
 

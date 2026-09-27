@@ -1,0 +1,23 @@
+appId: com.app20.chat
+---
+- launchApp
+- tapOn: Open conversations
+- tapOn: Sync active fixture
+- assertVisible: Local fixture response
+- tapOn: Ask anything
+- inputText: Unsaved fixture draft
+- extendedWaitUntil:
+    visible: Conversation sync is held. Choose which copy to keep.
+    timeout: 30000
+- assertVisible: Unsaved fixture draft
+- assertVisible: Local fixture response
+- assertNotVisible: Remote fixture response
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: Conversation sync is held. Choose which copy to keep.
+    timeout: 30000
+- tapOn: Open conversations
+- tapOn: Sync active fixture
+- assertVisible: Unsaved fixture draft
+- assertVisible: Local fixture response
