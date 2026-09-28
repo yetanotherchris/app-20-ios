@@ -15,6 +15,7 @@ interface Props {
 
 export function ModelCatalog({ saved, draft, visible, disabled, onChange }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const [retained, setRetained] = useState<Record<string, readonly string[]>>({})
   const [query, setQuery] = useState('')
   const [manual, setManual] = useState('')
   const [models, setModels] = useState<readonly CatalogModel[]>([])
@@ -57,11 +58,17 @@ export function ModelCatalog({ saved, draft, visible, disabled, onChange }: Prop
   const editable = !disabled && endpoint !== null && endpoint === activeEndpoint
   const selected = activeEndpoint ? enabledModels(draft) : []
   const known = new Set(models.map((model) => model.id))
-  const rows = [...models, ...selected.filter((id) => !known.has(id)).map((id) => ({ id, name: id }))]
+  const unlisted = [...new Set([...selected, ...(endpoint ? (retained[endpoint] ?? []) : [])])].filter(
+    (id) => !known.has(id),
+  )
+  const rows = [...models, ...unlisted.map((id) => ({ id, name: id }))]
   const matches = searchModels(rows, query)
 
   function toggle(id: string): void {
     if (!editable) return
+    if (endpoint && !known.has(id)) {
+      setRetained((previous) => ({ ...previous, [endpoint]: [...new Set([...(previous[endpoint] ?? []), id])] }))
+    }
     onChange(
       withEnabledModels(draft, selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]),
     )

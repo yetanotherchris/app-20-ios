@@ -85,4 +85,5 @@ Let users search the configured provider's model catalog and enable models in Se
 ## Assumptions & References
 
 - Discovery follows the saved provider endpoint, rather than always querying OpenAI directly.
+- Unlisted identifiers remain available within an endpoint's editing session for disabling and re-enabling; only enabled choices persist across relaunch.
 - API references: [OpenRouter model catalog](https://openrouter.ai/docs/api/api-reference/models/get-models) and [OpenAI models API](https://platform.openai.com/docs/api-reference/models).

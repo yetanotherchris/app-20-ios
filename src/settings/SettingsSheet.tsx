@@ -505,7 +505,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
               onFocus={() => focusField('endpoint')}
             />
           </View>
-          {Object.keys(errors).some((key) => key !== 'apiKey') ? (
+          {(['bucket', 'region', 'accessKeyId', 'secretAccessKey', 'endpoint'] as const).some((key) => errors[key]) ? (
             <Text style={styles.error}>Complete S3 Keys to save.</Text>
           ) : null}
         </ScrollView>

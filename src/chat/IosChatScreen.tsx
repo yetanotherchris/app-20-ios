@@ -28,6 +28,7 @@ import {
   type ChatSessionControls,
   type LLMChatScrollToLatestProps,
   type Message,
+  type MessageAction,
   type ThemeInput,
 } from 'app-20-llmchat'
 import { createOpenRouterProvider } from '../ai'
@@ -133,18 +134,21 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   const [providerSettings, setProviderSettings] = useState<SettingsSnapshot | null>(null)
   const providerSettingsRef = useRef<SettingsSnapshot | null>(null)
   const selectionRef = useRef<ModelSelection | null>(null)
+  const retainedSelectionRef = useRef<ModelSelection | null>(null)
   const [selection, setSelectionState] = useState<ModelSelection | null>(null)
   const capturedRequestRef = useRef<{ settings: SettingsSnapshot; selection: ModelSelection } | null>(null)
   const hadSelectionRef = useRef(false)
 
   const setSelection = useCallback((next: ModelSelection | null): void => {
     selectionRef.current = next
+    if (next) retainedSelectionRef.current = next
     setSelectionState(next)
   }, [])
 
   const restoreModel = useCallback(
     (conversation: Conversation | null): void => {
       const settings = providerSettingsRef.current
+      retainedSelectionRef.current = null
       setSelection(
         settings ? (conversation ? restoreSelection(conversation, settings) : initialSelection(settings)) : null,
       )
@@ -275,8 +279,10 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
           {
             id: conversationIdRef.current,
             createdAt: createdAtRef.current,
-            model: selectionRef.current?.id ?? baseRef.current?.model ?? '',
-            ...(selectionRef.current ? { selectionProvenance: { endpoint: selectionRef.current.endpoint } } : {}),
+            model: retainedSelectionRef.current?.id ?? baseRef.current?.model ?? '',
+            ...(retainedSelectionRef.current
+              ? { selectionProvenance: { endpoint: retainedSelectionRef.current.endpoint } }
+              : {}),
             messages: messagesRef.current,
             draft: draftRef.current,
           },
@@ -296,8 +302,10 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
                 {
                   id: conversationIdRef.current,
                   createdAt: createdAtRef.current,
-                  model: selectionRef.current?.id ?? previous?.model ?? '',
-                  ...(selectionRef.current ? { selectionProvenance: { endpoint: selectionRef.current.endpoint } } : {}),
+                  model: retainedSelectionRef.current?.id ?? previous?.model ?? '',
+                  ...(retainedSelectionRef.current
+                    ? { selectionProvenance: { endpoint: retainedSelectionRef.current.endpoint } }
+                    : {}),
                   messages: messagesRef.current,
                   draft: draftRef.current,
                 },
@@ -522,6 +530,51 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
     setEditSource(null)
     setDraft(restoredDraft)
   }, [setDraft])
+
+  async function runResponseAction(action: () => void): Promise<void> {
+    if (gatePending || chatStatusRef.current !== 'idle') return
+    const generation = sessionGenerationRef.current
+    setGatePending(true)
+    try {
+      const settings = await secretsRef.current.readSettings()
+      if (generation !== sessionGenerationRef.current || chatStatusRef.current !== 'idle') return
+      providerSettingsRef.current = settings
+      setProviderSettings(settings)
+      setHasProviderKey(Boolean(settings.apiKey))
+      if (!validSelection(selectionRef.current, settings)) {
+        setSelection(null)
+        setNotice(
+          enabledModels(settings).length ? 'Choose a model before sending.' : 'Add models in Settings before sending.',
+        )
+        return
+      }
+      if (!settings.apiKey) {
+        setSettingsOpen(true)
+        return
+      }
+      capturedRequestRef.current = { settings, selection: { ...selectionRef.current } }
+      action()
+    } catch {
+      setNotice('The response could not be started.')
+    } finally {
+      setGatePending(false)
+    }
+  }
+
+  const messageActions: readonly MessageAction[] = chat.messageActions.map((action) =>
+    action.id !== 'retry' && action.id !== 'regenerate'
+      ? action
+      : {
+          ...action,
+          available: (message) =>
+            Boolean(selection && hasProviderKey) &&
+            !gatePending &&
+            (typeof action.available === 'function' ? action.available(message) : action.available !== false),
+          onAction: (selectedAction, message) => {
+            void runResponseAction(() => action.onAction(selectedAction, message))
+          },
+        },
+  )
 
   async function submit(): Promise<void> {
     if (gatePending || draftRef.current.trim().length === 0) return
@@ -896,7 +949,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
             onSubmit={() => void submit()}
             onStop={stop}
             onLoadEarlier={() => undefined}
-            messageActions={chat.messageActions}
+            messageActions={messageActions}
             onLinkPress={() => undefined}
             composerVariant="ios"
             themeOverride={{

@@ -1,0 +1,48 @@
+appId: com.app20.chat
+---
+# Place generated fixture TOML files in the iOS document picker's Recents before running.
+- launchApp:
+    clearState: true
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: Import from TOML file
+- tapOn: fixture-atomic.toml
+- assertVisible: Imported settings. Saved.
+- assertVisible: ${PROVIDER_A}
+- tapOn: Show API key
+- assertVisible: fixture-key
+- tapOn: Hide API key
+- tapOn: Manage models
+- assertVisible: Disable model fixture/shared
+- tapOn: Close model settings
+- tapOn: Import from TOML file
+- tapOn: fixture-invalid.toml
+- assertVisible: Use an absolute HTTPS API base URL without credentials, query, fragment or a complete route.
+- assertVisible: ${PROVIDER_A}
+- tapOn: Show API key
+- assertVisible: fixture-key
+- tapOn: Hide API key
+- tapOn: Import from TOML file
+- tapOn: fixture-empty.toml
+- assertVisible: Imported settings. Saved.
+- assertVisible: ${PROVIDER_B}
+- tapOn: Show API key
+- assertVisible: fixture-key-b
+- tapOn: Hide API key
+- tapOn: Manage models
+- assertVisible: No enabled models. Enable a model here to send messages.
+- tapOn: Close model settings
+- tapOn: Close settings
+- tapOn: New chat
+- assertVisible: Add models in Settings
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Settings
+- assertVisible: ${PROVIDER_B}
+- tapOn: Import from TOML file
+- tapOn: fixture-reset.toml
+- assertVisible: Imported settings. Saved.
+- assertVisible: https://openrouter.ai/api/v1
+- tapOn: Manage models
+- assertVisible: Disable model openrouter/auto

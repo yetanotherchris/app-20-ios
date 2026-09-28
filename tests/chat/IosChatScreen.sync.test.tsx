@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { Message, ChatOperation, ChatSessionControls } from 'app-20-llmchat'
+import type { Message, MessageAction, ChatOperation, ChatSessionControls } from 'app-20-llmchat'
 import type { Conversation } from '../../src/storage'
 import type { SettingsSnapshot } from '../../src/secrets/secretService'
 import type { ReconciliationOptions } from '../../src/sync/reconciliation'
@@ -21,6 +21,8 @@ const fixture = vi.hoisted(() => ({
   settings: null as SettingsSnapshot | null,
   requests: vi.fn(),
   resumeStream: null as (() => void) | null,
+  actions: [] as readonly MessageAction[],
+  reopen: vi.fn(),
 }))
 vi.mock('../../src/ai', () => ({
   AUTOMATIC_MODEL: 'openrouter/auto',
@@ -104,7 +106,10 @@ vi.mock('app-20-llmchat', () => ({
       messages: fixture.messages,
       status: fixture.status,
       replaceMessages: fixture.replace,
-      messageActions: {},
+      messageActions: [
+        { id: 'regenerate', label: 'Regenerate', group: 'Response', available: true, onAction: fixture.reopen },
+        { id: 'retry', label: 'Retry', group: 'Response', available: true, onAction: fixture.reopen },
+      ],
       submit: vi.fn(),
       stop: vi.fn(),
     }
@@ -113,15 +118,20 @@ vi.mock('app-20-llmchat', () => ({
     Root: ({
       onChangeDraft,
       renderAboveComposer,
+      messageActions,
     }: {
       onChangeDraft: (draft: string) => void
       renderAboveComposer: () => React.ReactNode
-    }) => (
-      <>
-        <input aria-label="draft" onChange={(event) => onChangeDraft(event.target.value)} />
-        {renderAboveComposer()}
-      </>
-    ),
+      messageActions: readonly MessageAction[]
+    }) => {
+      fixture.actions = messageActions
+      return (
+        <>
+          <input aria-label="draft" onChange={(event) => onChangeDraft(event.target.value)} />
+          {renderAboveComposer()}
+        </>
+      )
+    },
   },
 }))
 import { IosChatScreen } from '../../src/chat/IosChatScreen'
@@ -360,7 +370,9 @@ it('invalidates same-ID selections after endpoint changes without changing an in
       return { remove: vi.fn() }
     },
   }
-  render(<IosChatScreen appState={lifecycle} />)
+  fixture.messages = [msg('u', 'user'), msg('reply', 'assistant', 'streaming')]
+  fixture.status = 'streaming'
+  const view = render(<IosChatScreen appState={lifecycle} />)
   await waitFor(() => expect(screen.getByLabelText('Chat model')).toHaveValue('same'))
   fixture.resumeStream = () => undefined
   const controls = { appendChunk: vi.fn(), complete: vi.fn(), fail: vi.fn(), stopRequested: () => false }
@@ -380,4 +392,44 @@ it('invalidates same-ID selections after endpoint changes without changing an in
   expect(fixture.requests.mock.calls.at(-1)?.[1]).toMatchObject({ model: 'same' })
   await act(async () => fixture.resumeStream!())
   await waitFor(() => expect(controls.complete).toHaveBeenCalled())
+  fixture.status = 'idle'
+  fixture.messages = [msg('u', 'user'), msg('reply', 'assistant')]
+  view.rerender(<IosChatScreen appState={lifecycle} />)
+  await waitFor(() => expect(fixture.save).toHaveBeenCalled())
+  expect(fixture.save.mock.calls.at(-1)?.[0]).toMatchObject({
+    model: 'same',
+    selectionProvenance: { endpoint: 'https://a.example/v1' },
+  })
+  expect(screen.getByLabelText('Chat model')).toHaveValue('')
+})
+
+it('blocks stale regeneration and retry before the library can erase a completed answer', async () => {
+  fixture.settings = {
+    ...fixture.settings!,
+    endpoint: 'https://a.example/v1',
+    modelPreferences: { 'https://a.example/v1': ['same'], 'https://b.example/v1': ['same'] },
+  }
+  fixture.messages = [msg('u', 'user'), msg('answer to preserve', 'assistant')]
+  fixture.reopen.mockImplementation(() => {
+    fixture.messages = [msg('u', 'user'), { ...msg('answer to preserve', 'assistant', 'sending'), contentParts: [] }]
+  })
+  render(<IosChatScreen appState={appState} />)
+  await waitFor(() => expect(screen.getByLabelText('Chat model')).toHaveValue('same'))
+  const staleActions = fixture.actions
+  fixture.settings = { ...fixture.settings, endpoint: 'https://b.example/v1' }
+  for (const action of staleActions) {
+    await act(async () => {
+      action.onAction(action, fixture.messages[1]!)
+    })
+    await waitFor(() => expect(screen.getByText('Choose a model before sending.')).toBeVisible())
+    expect(fixture.reopen).not.toHaveBeenCalled()
+    expect(fixture.requests).not.toHaveBeenCalled()
+    expect(fixture.messages[1]?.contentParts[0]?.text).toBe('answer to preserve')
+  }
+  fireEvent.change(screen.getByLabelText('Chat model'), { target: { value: 'same' } })
+  const confirmed = fixture.actions.find((action) => action.id === 'regenerate')!
+  await act(async () => {
+    confirmed.onAction(confirmed, fixture.messages[1]!)
+  })
+  await waitFor(() => expect(fixture.reopen).toHaveBeenCalledTimes(1))
 })

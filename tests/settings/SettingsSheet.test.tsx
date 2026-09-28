@@ -290,6 +290,7 @@ it('keeps invalid API URL drafts inactive and retries an atomic endpoint/key/mod
     expect(screen.getByText('Use an absolute HTTPS base URL without credentials, query or fragment.')).toBeVisible(),
   )
   expect(settings.commitSettings).not.toHaveBeenCalled()
+  expect(screen.queryByText('Complete S3 Keys to save.')).toBeNull()
   fireEvent.click(screen.getByLabelText('Reset API base URL to default'))
   vi.mocked(settings.commitSettings).mockRejectedValueOnce(new Error('interrupted'))
   pickToml('endpoint = "https://new.example/prefix/v1/"\napiKey = "new-fixture-key"\nenabledModels = ["Vendor/exact"]')

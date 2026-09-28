@@ -64,3 +64,7 @@ Selection is a model identifier and normalized endpoint. Restore only when both 
 ## Complexity Tracking
 
 No exceptions. Native UI and filesystem acceptance cannot be inferred from jsdom tests.
+
+## 2026-09-28 implementation refinements
+
+Retain a conversation selection separately from its live sending eligibility so endpoint or enabled-list invalidation during the first response cannot lose model/provenance at completion. Validate retry/regenerate against one saved settings snapshot before invoking the library action that clears response content. Retain unlisted identifiers in endpoint-scoped in-memory editing state while toggling, so disabling does not remove the control needed to re-enable. Native acceptance files cover cross-endpoint provenance, seeded legacy history and joint TOML imports; native protected-write interruption still requires unavailable device fault injection.
