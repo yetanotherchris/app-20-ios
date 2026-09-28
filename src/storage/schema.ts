@@ -1,3 +1,4 @@
+import { normalizeProviderEndpoint } from '../ai/providerEndpoint'
 import { isRecord } from './guards'
 
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool'
@@ -42,6 +43,16 @@ export function toPersistedStatus(value: string): PersistedMessageStatus {
   return 'complete'
 }
 
+function safeSelectionProvenance(value: Record<string, unknown>): Record<string, unknown> {
+  if (typeof value.endpoint !== 'string') return {}
+  try {
+    const endpoint = normalizeProviderEndpoint(value.endpoint)
+    return endpoint === value.endpoint ? { endpoint } : {}
+  } catch {
+    return {}
+  }
+}
+
 function serializeMessage(message: ConversationMessage): Record<string, unknown> {
   const output: Record<string, unknown> = {
     id: message.id,
@@ -71,7 +82,8 @@ export function serializeConversation(conversation: Conversation): string {
     updatedAt: conversation.updatedAt,
   }
   if (conversation.draft !== undefined) output.draft = conversation.draft
-  if (conversation.selectionProvenance !== undefined) output.selectionProvenance = conversation.selectionProvenance
+  if (conversation.selectionProvenance !== undefined)
+    output.selectionProvenance = safeSelectionProvenance(conversation.selectionProvenance)
   output.messages = conversation.messages.map(serializeMessage)
   return JSON.stringify(output, null, 2)
 }
@@ -132,7 +144,7 @@ export function parseConversation(value: unknown): Conversation | null {
     messages: parsedMessages,
   }
   if (draft !== undefined) conversation.draft = draft
-  if (isRecord(selectionProvenance)) conversation.selectionProvenance = selectionProvenance
+  if (isRecord(selectionProvenance)) conversation.selectionProvenance = safeSelectionProvenance(selectionProvenance)
   return conversation
 }
 

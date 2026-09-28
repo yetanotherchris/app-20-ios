@@ -1,3 +1,7 @@
+import { normalizeProviderEndpoint, providerRoute } from '../ai/providerEndpoint'
+import { enabledModels } from '../settings/modelPreferences'
+import { initialSelection, restoreSelection, validSelection, type ModelSelection } from './modelSelection'
+import type { SettingsSnapshot } from '../secrets/secretService'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AccessibilityInfo,
@@ -24,9 +28,10 @@ import {
   type ChatSessionControls,
   type LLMChatScrollToLatestProps,
   type Message,
+  type MessageAction,
   type ThemeInput,
 } from 'app-20-llmchat'
-import { AUTOMATIC_MODEL, createOpenRouterProvider } from '../ai'
+import { createOpenRouterProvider } from '../ai'
 import { createConversationStore, MANIFEST_FILE_NAME, type Conversation, type ManifestEntry } from '../storage'
 import type { AppStateStatus } from 'react-native'
 import { createConversationFilePort } from '../storage/conversationFilePort'
@@ -126,7 +131,47 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
   const [draft, setDraftState] = useState('')
   const [editSourceId, setEditSourceId] = useState<string | null>(null)
-  const [modelName, setModelName] = useState('Openrouter Auto')
+  const [providerSettings, setProviderSettings] = useState<SettingsSnapshot | null>(null)
+  const providerSettingsRef = useRef<SettingsSnapshot | null>(null)
+  const selectionRef = useRef<ModelSelection | null>(null)
+  const retainedSelectionRef = useRef<ModelSelection | null>(null)
+  const [selection, setSelectionState] = useState<ModelSelection | null>(null)
+  const capturedRequestRef = useRef<{ settings: SettingsSnapshot; selection: ModelSelection } | null>(null)
+  const hadSelectionRef = useRef(false)
+
+  const setSelection = useCallback((next: ModelSelection | null): void => {
+    selectionRef.current = next
+    if (next) retainedSelectionRef.current = next
+    setSelectionState(next)
+  }, [])
+
+  const restoreModel = useCallback(
+    (conversation: Conversation | null): void => {
+      const settings = providerSettingsRef.current
+      retainedSelectionRef.current = null
+      setSelection(
+        settings ? (conversation ? restoreSelection(conversation, settings) : initialSelection(settings)) : null,
+      )
+      hadSelectionRef.current = conversation !== null || selectionRef.current !== null
+    },
+    [setSelection],
+  )
+
+  const refreshProviderSettings = useCallback(async (): Promise<void> => {
+    try {
+      const settings = await secretsRef.current.readSettings()
+      providerSettingsRef.current = settings
+      setProviderSettings(settings)
+      setHasProviderKey(Boolean(settings.apiKey))
+      if (selectionRef.current) {
+        if (!validSelection(selectionRef.current, settings)) setSelection(null)
+      } else if (!hadSelectionRef.current) {
+        restoreModel(baseRef.current)
+      }
+    } catch {
+      setNotice('Provider settings could not be loaded.')
+    }
+  }, [restoreModel, setSelection])
   const [notice, setNotice] = useState<string | null>(null)
   const [entries, setEntries] = useState<readonly ManifestEntry[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -234,7 +279,10 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
           {
             id: conversationIdRef.current,
             createdAt: createdAtRef.current,
-            model: baseRef.current?.model ?? AUTOMATIC_MODEL,
+            model: retainedSelectionRef.current?.id ?? baseRef.current?.model ?? '',
+            ...(retainedSelectionRef.current
+              ? { selectionProvenance: { endpoint: retainedSelectionRef.current.endpoint } }
+              : {}),
             messages: messagesRef.current,
             draft: draftRef.current,
           },
@@ -254,7 +302,10 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
                 {
                   id: conversationIdRef.current,
                   createdAt: createdAtRef.current,
-                  model: previous?.model ?? AUTOMATIC_MODEL,
+                  model: retainedSelectionRef.current?.id ?? previous?.model ?? '',
+                  ...(retainedSelectionRef.current
+                    ? { selectionProvenance: { endpoint: retainedSelectionRef.current.endpoint } }
+                    : {}),
                   messages: messagesRef.current,
                   draft: draftRef.current,
                 },
@@ -292,13 +343,20 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       controlsRef.current = controls
       const messages = toProviderMessages(messagesRef.current, operation.messageId)
       if (operation.kind === 'submit') messages.push({ role: 'user', content: operation.prompt })
-      const provider = createOpenRouterProvider({
-        apiKey: () => secretsRef.current.getProviderKey(),
-      })
+      const captured = capturedRequestRef.current
+      capturedRequestRef.current = null
+      const selectedAtStart = selectionRef.current ? { ...selectionRef.current } : null
       let succeeded = false
       void (async () => {
         try {
-          for await (const chunk of provider.streamChat({ model: AUTOMATIC_MODEL, messages }, controller.signal)) {
+          const requestSettings = captured?.settings ?? (await secretsRef.current.readSettings())
+          const requestSelection = captured?.selection ?? selectedAtStart
+          if (!validSelection(requestSelection, requestSettings)) throw new Error('Choose a model before sending.')
+          const provider = createOpenRouterProvider({
+            apiKey: requestSettings.apiKey,
+            endpoint: providerRoute(requestSettings.endpoint, 'chat/completions'),
+          })
+          for await (const chunk of provider.streamChat({ model: requestSelection.id, messages }, controller.signal)) {
             controls.appendChunk(chunk)
           }
           if (!controller.signal.aborted) {
@@ -329,6 +387,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   messagesRef.current = chat.messages
   applyRemoteRef.current = (conversation) => {
     baseRef.current = conversation
+    restoreModel(conversation)
     createdAtRef.current = conversation.createdAt
     messagesRef.current = fromConversation(conversation)
     chat.replaceMessages(messagesRef.current)
@@ -368,8 +427,8 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
   }, [sync])
 
   useEffect(() => {
-    void secretsRef.current.hasProviderKey().then(setHasProviderKey)
-  }, [sync])
+    void refreshProviderSettings()
+  }, [refreshProviderSettings])
 
   useEffect(() => {
     // Track the live keyboard frame, including interactive dismissal, with a
@@ -395,7 +454,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       if (state !== 'active') void autosave.flush()
       if (state === 'active') {
         void sync.run()
-        void secretsRef.current.hasProviderKey().then(setHasProviderKey)
+        void refreshProviderSettings()
       }
     })
     return () => {
@@ -403,7 +462,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       autosave.cancelDraftTimer()
       void autosave.flush()
     }
-  }, [appState, autosave, sync])
+  }, [appState, autosave, sync, refreshProviderSettings])
 
   const setDraft = useCallback(
     (value: string): void => {
@@ -472,15 +531,71 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
     setDraft(restoredDraft)
   }, [setDraft])
 
+  async function runResponseAction(action: () => void): Promise<void> {
+    if (gatePending || chatStatusRef.current !== 'idle') return
+    const generation = sessionGenerationRef.current
+    setGatePending(true)
+    try {
+      const settings = await secretsRef.current.readSettings()
+      if (generation !== sessionGenerationRef.current || chatStatusRef.current !== 'idle') return
+      providerSettingsRef.current = settings
+      setProviderSettings(settings)
+      setHasProviderKey(Boolean(settings.apiKey))
+      if (!validSelection(selectionRef.current, settings)) {
+        setSelection(null)
+        setNotice(
+          enabledModels(settings).length ? 'Choose a model before sending.' : 'Add models in Settings before sending.',
+        )
+        return
+      }
+      if (!settings.apiKey) {
+        setSettingsOpen(true)
+        return
+      }
+      capturedRequestRef.current = { settings, selection: { ...selectionRef.current } }
+      action()
+    } catch {
+      setNotice('The response could not be started.')
+    } finally {
+      setGatePending(false)
+    }
+  }
+
+  const messageActions: readonly MessageAction[] = chat.messageActions.map((action) =>
+    action.id !== 'retry' && action.id !== 'regenerate'
+      ? action
+      : {
+          ...action,
+          available: (message) =>
+            Boolean(selection && hasProviderKey) &&
+            !gatePending &&
+            (typeof action.available === 'function' ? action.available(message) : action.available !== false),
+          onAction: (selectedAction, message) => {
+            void runResponseAction(() => action.onAction(selectedAction, message))
+          },
+        },
+  )
+
   async function submit(): Promise<void> {
     if (gatePending || draftRef.current.trim().length === 0) return
     setGatePending(true)
     try {
-      if (!(await secretsRef.current.hasProviderKey())) {
+      const settings = await secretsRef.current.readSettings()
+      providerSettingsRef.current = settings
+      setProviderSettings(settings)
+      if (!validSelection(selectionRef.current, settings)) {
+        setSelection(null)
+        setNotice(
+          enabledModels(settings).length ? 'Choose a model before sending.' : 'Add models in Settings before sending.',
+        )
+        return
+      }
+      if (!settings.apiKey) {
         setHasProviderKey(false)
         setSettingsOpen(true)
         return
       }
+      capturedRequestRef.current = { settings, selection: { ...selectionRef.current } }
       const text = draftRef.current.trim()
       const wasEditing = editSourceRef.current !== null
       // Record the pre-submit message ids so a failure can remove exactly the
@@ -610,6 +725,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       controllerRef.current?.abort()
       controllerRef.current = null
       baseRef.current = result.conversation
+      restoreModel(result.conversation)
       conversationIdRef.current = result.conversation.id
       createdAtRef.current = result.conversation.createdAt
       messagesRef.current = fromConversation(result.conversation)
@@ -630,6 +746,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
       conversationIdRef.current = createId('conversation')
       createdAtRef.current = new Date().toISOString()
       baseRef.current = null
+      restoreModel(null)
       messagesRef.current = []
       chat.replaceMessages([])
       setEditSource(null)
@@ -686,7 +803,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
 
   const renderSend = useCallback(
     ({ disabled, onPress }: { disabled: boolean; onPress: () => void }) => {
-      const sendDisabled = disabled || !hasProviderKey
+      const sendDisabled = disabled || !hasProviderKey || !selection
       return (
         <Pressable
           accessibilityLabel="Send message"
@@ -709,7 +826,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
         </Pressable>
       )
     },
-    [hasProviderKey],
+    [hasProviderKey, selection],
   )
 
   const renderScrollToLatest = useCallback(
@@ -759,11 +876,31 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
           <Host matchContents style={styles.modelPickerHost}>
             <Picker
               appearance="menu"
-              onValueChange={(value) => setModelName(String(value))}
-              selectedValue={modelName}
+              onValueChange={(value) => {
+                const settings = providerSettingsRef.current
+                const id = String(value)
+                if (!settings || !enabledModels(settings).includes(id)) return
+                setSelection({ id, endpoint: normalizeProviderEndpoint(settings.endpoint) })
+                hadSelectionRef.current = true
+                workVersionRef.current += 1
+                autosave.trigger()
+              }}
+              selectedValue={selection?.id ?? ''}
               testID="chat.model-picker"
             >
-              <Picker.Item label="Openrouter Auto" value="Openrouter Auto" />
+              {!selection ? (
+                <Picker.Item
+                  label={
+                    providerSettings && enabledModels(providerSettings).length
+                      ? 'Choose a model'
+                      : 'Add models in Settings'
+                  }
+                  value=""
+                />
+              ) : null}
+              {providerSettings
+                ? enabledModels(providerSettings).map((id) => <Picker.Item key={id} label={id} value={id} />)
+                : null}
             </Picker>
           </Host>
         </View>
@@ -801,7 +938,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
             status={chat.status}
             hasEarlierMessages={false}
             isLoadingEarlier={false}
-            disabled={gatePending || !hasProviderKey}
+            disabled={gatePending || !hasProviderKey || !selection}
             readOnly={chat.status !== 'idle'}
             followThreshold={40}
             scrollToLatestShowThreshold={80}
@@ -812,7 +949,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
             onSubmit={() => void submit()}
             onStop={stop}
             onLoadEarlier={() => undefined}
-            messageActions={chat.messageActions}
+            messageActions={messageActions}
             onLinkPress={() => undefined}
             composerVariant="ios"
             themeOverride={{
@@ -1059,7 +1196,7 @@ export function IosChatScreen({ appState }: IosChatScreenProps): React.JSX.Eleme
         onSaved={() => {
           void sync.configurationChanged()
           void (async () => {
-            setHasProviderKey(await secretsRef.current.hasProviderKey())
+            await refreshProviderSettings()
           })()
         }}
       />

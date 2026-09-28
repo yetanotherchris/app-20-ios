@@ -1,8 +1,12 @@
+import { normalizeProviderEndpoint } from '../ai/providerEndpoint'
+import { validateModelIdentifiers } from './modelPreferences'
 import { parseSettingsToml } from './settingsToml'
 import type { SettingsSnapshot } from '../secrets/secretService'
 
 export interface SettingsPatch {
   apiKey?: string
+  endpoint?: string
+  enabledModels?: string[]
   s3?: Partial<SettingsSnapshot['s3']>
 }
 
@@ -132,9 +136,20 @@ function parseJson(raw: string): SettingsImportResult {
 function validateDocument(value: unknown): SettingsImportResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid('Use a JSON settings object.')
   const record = value as Record<string, unknown>
-  if (Object.keys(record).some((key) => key !== 'apiKey' && key !== 's3'))
+  if (Object.keys(record).some((key) => !['apiKey', 's3', 'endpoint', 'enabledModels'].includes(key)))
     return invalid('The file contains an unknown setting.')
   if (record.apiKey !== undefined && typeof record.apiKey !== 'string') return invalid('API key must be text.')
+  if (record.endpoint !== undefined) {
+    if (typeof record.endpoint !== 'string') return invalid('API base URL must be text.')
+    try {
+      normalizeProviderEndpoint(record.endpoint)
+    } catch {
+      return invalid('Use an absolute HTTPS API base URL without credentials, query, fragment or a complete route.')
+    }
+  }
+  if (record.enabledModels !== undefined && !validateModelIdentifiers(record.enabledModels)) {
+    return invalid('Enabled models must be a list of unique nonempty string identifiers.')
+  }
   if (record.s3 !== undefined && (!record.s3 || typeof record.s3 !== 'object' || Array.isArray(record.s3))) {
     return invalid('S3 settings must be an object.')
   }
@@ -154,11 +169,19 @@ function validateDocument(value: unknown): SettingsImportResult {
   }
   const invalidValue = invalidProvidedValue(s3Patch)
   if (invalidValue) return invalid(invalidValue)
-  if (record.apiKey === undefined && Object.keys(s3Patch).length === 0) return invalid('The file contains no settings.')
+  if (
+    record.apiKey === undefined &&
+    record.endpoint === undefined &&
+    record.enabledModels === undefined &&
+    Object.keys(s3Patch).length === 0
+  )
+    return invalid('The file contains no settings.')
   return {
     ok: true,
     patch: {
       ...(typeof record.apiKey === 'string' ? { apiKey: record.apiKey } : {}),
+      ...(typeof record.endpoint === 'string' ? { endpoint: normalizeProviderEndpoint(record.endpoint) } : {}),
+      ...(validateModelIdentifiers(record.enabledModels) ? { enabledModels: record.enabledModels } : {}),
       ...(s3 ? { s3: s3Patch } : {}),
     },
   }

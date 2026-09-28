@@ -1,3 +1,5 @@
+import { normalizeProviderEndpoint } from '../ai/providerEndpoint'
+import { validateModelIdentifiers } from '../settings/modelPreferences'
 import { parseSettingsToml, serializeSettingsToml } from '../settings/settingsToml'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
@@ -15,7 +17,12 @@ export interface S3Config {
   endpoint?: string
 }
 
-export interface SettingsSnapshot {
+export interface ProviderSettings {
+  endpoint?: string
+  modelPreferences?: Record<string, string[]>
+}
+
+export interface SettingsSnapshot extends ProviderSettings {
   apiKey: string
   s3: {
     accessKeyId: string
@@ -32,7 +39,7 @@ export interface SecretService {
   getProviderKey(): Promise<string | null>
   getS3Config(): Promise<S3Config | null>
   readSettings(): Promise<SettingsSnapshot>
-  commitSettings(apiKey: string, s3?: S3Config | null): Promise<void>
+  commitSettings(apiKey: string, s3?: S3Config | null, provider?: ProviderSettings): Promise<void>
   saveApiKey(value: string): Promise<void>
   saveS3Config(config: S3Config | null): Promise<void>
 }
@@ -126,6 +133,23 @@ function storedSnapshot(raw: string): SettingsSnapshot {
     const fields = s3 as Record<string, unknown>
     const snapshot = emptySettings()
     snapshot.apiKey = value.apiKey
+    if (value.endpoint !== undefined) {
+      if (typeof value.endpoint !== 'string') throw new Error()
+      snapshot.endpoint = normalizeProviderEndpoint(value.endpoint)
+    }
+    if (value.modelPreferences !== undefined) {
+      if (
+        !value.modelPreferences ||
+        typeof value.modelPreferences !== 'object' ||
+        Array.isArray(value.modelPreferences)
+      )
+        throw new Error()
+      snapshot.modelPreferences = {}
+      for (const [endpoint, ids] of Object.entries(value.modelPreferences)) {
+        if (normalizeProviderEndpoint(endpoint) !== endpoint || !validateModelIdentifiers(ids)) throw new Error()
+        snapshot.modelPreferences[endpoint] = ids
+      }
+    }
     for (const key of Object.keys(snapshot.s3) as Array<keyof SettingsSnapshot['s3']>) {
       if (typeof fields[key] !== 'string') throw new Error()
       snapshot.s3[key] = fields[key]
@@ -179,10 +203,20 @@ function snapshotConfig(snapshot: SettingsSnapshot): S3Config | null {
 }
 
 export function createSecretService(): SecretService {
-  async function commitSettings(apiKey: string, s3?: S3Config | null): Promise<void> {
+  async function commitSettings(apiKey: string, s3?: S3Config | null, provider?: ProviderSettings): Promise<void> {
     await serialized(async () => {
       const snapshot = await readSnapshot()
       snapshot.apiKey = apiKey
+      if (provider?.endpoint !== undefined) snapshot.endpoint = normalizeProviderEndpoint(provider.endpoint)
+      if (provider?.modelPreferences !== undefined) {
+        const preferences: Record<string, string[]> = {}
+        for (const [endpoint, ids] of Object.entries(provider.modelPreferences)) {
+          if (normalizeProviderEndpoint(endpoint) !== endpoint || !validateModelIdentifiers(ids))
+            throw new Error('Invalid model preferences.')
+          preferences[endpoint] = [...ids]
+        }
+        snapshot.modelPreferences = preferences
+      }
       if (s3 !== undefined) snapshot.s3 = s3 === null ? emptySettings().s3 : { ...s3, endpoint: s3.endpoint ?? '' }
       await writeSnapshot(snapshot)
     })

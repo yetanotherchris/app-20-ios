@@ -1,0 +1,47 @@
+appId: com.app20.chat
+---
+- launchApp:
+    clearState: true
+- tapOn: Open conversations
+- tapOn: Settings
+- assertVisible: API base URL
+- tapOn: API base URL
+- eraseText
+- inputText: http://invalid.example/v1
+- tapOn: API base URL
+- hideKeyboard
+- assertVisible: Use an absolute HTTPS base URL without credentials, query or fragment.
+- tapOn: Reset API base URL to default
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_A}
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- tapOn: Exact model identifier
+- inputText: fixture/shared
+- tapOn: Add model
+- assertVisible: Disable model fixture/shared
+- tapOn: Close model settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_B}
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- assertVisible: No enabled models. Enable a model here to send messages.
+- tapOn: Close model settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_A}
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- assertVisible: Disable model fixture/shared
+- tapOn: Close model settings
+- tapOn: Close settings
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Settings
+- assertVisible: ${PROVIDER_A}

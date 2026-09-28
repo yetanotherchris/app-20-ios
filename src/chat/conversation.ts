@@ -5,6 +5,7 @@ export interface ConversationDraft {
   id: string
   createdAt: string
   model: string
+  selectionProvenance?: Record<string, unknown>
   messages: readonly Message[]
   draft: string
 }
@@ -59,7 +60,11 @@ export function toConversation(value: ConversationDraft, base: Conversation | nu
     updatedAt: newestActivity(value, base),
     draft: value.draft,
     messages: preserved,
-    ...(base?.selectionProvenance ? { selectionProvenance: base.selectionProvenance } : {}),
+    ...(value.selectionProvenance
+      ? { selectionProvenance: value.selectionProvenance }
+      : base?.selectionProvenance
+        ? { selectionProvenance: base.selectionProvenance }
+        : {}),
   }
 }
 

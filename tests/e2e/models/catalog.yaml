@@ -1,0 +1,29 @@
+appId: com.app20.chat
+---
+- launchApp:
+    clearState: true
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: Manage models
+- tapOn: Exact model identifier
+- inputText: fixture/manual-model
+- tapOn: Add model
+- assertVisible: Disable model fixture/manual-model
+- tapOn: Search models
+- inputText: FIXTURE/MANUAL
+- assertVisible: Disable model fixture/manual-model
+- tapOn: Disable model fixture/manual-model
+- assertVisible: Enable model fixture/manual-model
+- tapOn: Enable model fixture/manual-model
+- assertVisible: Disable model fixture/manual-model
+- assertVisible: FIXTURE/MANUAL
+- tapOn: Close model settings
+- tapOn: Close settings
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: Manage models
+- tapOn: Search models
+- inputText: fixture/manual
+- assertVisible: Disable model fixture/manual-model

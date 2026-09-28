@@ -1,0 +1,47 @@
+appId: com.app20.chat
+---
+- launchApp:
+    clearState: true
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_A}
+- hideKeyboard
+- tapOn: Enter API key
+- inputText: fixture-key
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- tapOn: Search models
+- inputText: fixture/
+- assertVisible: Enable model fixture/one
+- assertVisible: Enable model fixture/two
+- tapOn: Enable model fixture/one
+- tapOn: Enable model fixture/two
+- tapOn: Close model settings
+- tapOn: Close settings
+- tapOn: New chat
+- tapOn:
+    id: chat.model-picker
+- tapOn: fixture/one
+- tapOn:
+    id: chat.composer.input
+- inputText: first exact selection
+- tapOn: Send message
+- assertVisible: model=fixture/one
+- tapOn:
+    id: chat.model-picker
+- tapOn: fixture/two
+- tapOn:
+    id: chat.composer.input
+- inputText: second exact selection
+- tapOn: Send message
+- assertVisible: model=fixture/two
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: first exact selection
+- assertVisible: fixture/two
+- assertVisible: model=fixture/one
+- assertVisible: model=fixture/two

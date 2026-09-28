@@ -1,10 +1,10 @@
 # Feature Specification: Searchable Model Settings
 
-**Feature Branch**: `spec-121-124-settings-models-s3`
+**Feature Branch**: `spec-122-settings-model-catalog`
 **Created**: 2026-09-26
-**Status**: Draft
+**Status**: Archived
 **Input**: User description: "Add and toggle models in Settings using a searchable full list from an OpenAI-compatible /models endpoint, then show enabled models in the conversation dropdown."
-**Depends on**: [121 TOML Settings](../archive/121-toml-settings/spec.md), [123 Configurable Provider Endpoint](../123-provider-endpoint/spec.md)
+**Depends on**: [121 TOML Settings](../121-toml-settings/spec.md), [123 Configurable Provider Endpoint](../123-provider-endpoint/spec.md)
 
 ## Purpose
 
@@ -85,4 +85,5 @@ Let users search the configured provider's model catalog and enable models in Se
 ## Assumptions & References
 
 - Discovery follows the saved provider endpoint, rather than always querying OpenAI directly.
+- Unlisted identifiers remain available within an endpoint's editing session for disabling and re-enabling; only enabled choices persist across relaunch.
 - API references: [OpenRouter model catalog](https://openrouter.ai/docs/api/api-reference/models/get-models) and [OpenAI models API](https://platform.openai.com/docs/api-reference/models).

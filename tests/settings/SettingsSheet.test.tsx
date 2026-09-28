@@ -7,6 +7,11 @@ import type { SecretService, SettingsSnapshot } from '../../src/secrets/secretSe
 import { SettingsSheet } from '../../src/settings/SettingsSheet'
 
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: vi.fn() }))
+vi.mock('../../src/settings/modelCatalog', () => ({
+  catalogCache: new Map(),
+  searchModels: (models: unknown[]) => models,
+  loadModelCatalog: vi.fn(async () => []),
+}))
 vi.mock('expo-file-system', () => ({ File: vi.fn(), Paths: { cache: { uri: 'file:///cache/' } } }))
 
 const savedSettings: SettingsSnapshot = {
@@ -56,7 +61,7 @@ describe('SettingsSheet hydration', () => {
 
   it('retains the draft and exposes retry after a settings save fails', async () => {
     const settings = service(Promise.resolve(savedSettings))
-    vi.mocked(settings.saveApiKey).mockRejectedValue(new Error('SecureStore unavailable'))
+    vi.mocked(settings.commitSettings).mockRejectedValue(new Error('SecureStore unavailable'))
     render(<SettingsSheet visible service={settings} onClose={() => undefined} onSaved={() => undefined} />)
 
     const apiKey = screen.getByPlaceholderText('Enter API key')
@@ -121,21 +126,22 @@ describe('TOML import commits', () => {
   it('retains a newer pending edit when an older save completes during the picker', async () => {
     const settings = service(Promise.resolve(savedSettings))
     const write = deferred<void>()
+    const onSaved = vi.fn()
     const picker = deferred<DocumentPicker.DocumentPickerResult>()
-    vi.mocked(settings.saveApiKey).mockReturnValueOnce(write.promise)
+    vi.mocked(settings.commitSettings).mockReturnValueOnce(write.promise)
     vi.mocked(DocumentPicker.getDocumentAsync).mockReturnValue(picker.promise)
-    render(<SettingsSheet visible service={settings} onClose={() => undefined} onSaved={() => undefined} />)
+    render(<SettingsSheet visible service={settings} onClose={() => undefined} onSaved={onSaved} />)
     const apiKey = screen.getByPlaceholderText('Enter API key')
     await waitFor(() => expect(apiKey).toHaveValue('saved-key'))
     fireEvent.change(apiKey, { target: { value: 'edit-a' } })
     fireEvent.blur(apiKey)
-    await waitFor(() => expect(settings.saveApiKey).toHaveBeenCalledWith('edit-a'))
+    await waitFor(() => expect(settings.commitSettings).toHaveBeenCalledWith('edit-a', null))
     fireEvent.change(apiKey, { target: { value: 'edit-b' } })
     fireEvent.click(screen.getByLabelText('Import from TOML file'))
     write.resolve()
-    await waitFor(() => expect(settings.saveS3Config).toHaveBeenCalled())
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
     picker.resolve({ canceled: true, assets: null })
-    await waitFor(() => expect(settings.saveApiKey).toHaveBeenCalledWith('edit-b'), { timeout: 2000 })
+    await waitFor(() => expect(settings.commitSettings).toHaveBeenCalledWith('edit-b', null), { timeout: 2000 })
   })
 
   it('preserves omitted raw credentials and keeps the saved S3 helper for incomplete drafts', async () => {
@@ -184,9 +190,9 @@ describe('TOML import commits', () => {
     await waitFor(() => expect(apiKey).toHaveValue('saved-key'))
     fireEvent.change(apiKey, { target: { value: 'manual-edit' } })
     fireEvent.click(screen.getByLabelText('Import from TOML file'))
-    await waitFor(() => expect(settings.saveApiKey).toHaveBeenCalledWith('manual-edit'), { timeout: 2000 })
+    await waitFor(() => expect(settings.commitSettings).toHaveBeenCalledWith('manual-edit', null), { timeout: 2000 })
     expect(apiKey).toHaveValue('manual-edit')
-    expect(settings.commitSettings).not.toHaveBeenCalled()
+    expect(settings.commitSettings).toHaveBeenCalledTimes(1)
   })
 
   it('ignores blur saves while an import commit is pending', async () => {
@@ -271,4 +277,31 @@ it('explains transfer of local history to a changed S3 destination', async () =>
       'Changing the bucket, region or endpoint syncs all eligible chats on this device to the new destination.',
     ),
   ).toBeVisible()
+})
+
+it('keeps invalid API URL drafts inactive and retries an atomic endpoint/key/model import', async () => {
+  const settings = service(Promise.resolve(savedSettings))
+  const onSaved = vi.fn()
+  render(<SettingsSheet visible service={settings} onClose={() => undefined} onSaved={onSaved} />)
+  await waitFor(() => expect(screen.getByPlaceholderText('Enter API key')).toHaveValue('saved-key'))
+  fireEvent.change(screen.getByLabelText('API base URL'), { target: { value: 'http://invalid.example' } })
+  fireEvent.blur(screen.getByLabelText('API base URL'))
+  await waitFor(() =>
+    expect(screen.getByText('Use an absolute HTTPS base URL without credentials, query or fragment.')).toBeVisible(),
+  )
+  expect(settings.commitSettings).not.toHaveBeenCalled()
+  expect(screen.queryByText('Complete S3 Keys to save.')).toBeNull()
+  fireEvent.click(screen.getByLabelText('Reset API base URL to default'))
+  vi.mocked(settings.commitSettings).mockRejectedValueOnce(new Error('interrupted'))
+  pickToml('endpoint = "https://new.example/prefix/v1/"\napiKey = "new-fixture-key"\nenabledModels = ["Vendor/exact"]')
+  fireEvent.click(screen.getByLabelText('Import from TOML file'))
+  await waitFor(() => expect(screen.getByLabelText('Retry saving settings')).toBeVisible())
+  expect(onSaved).not.toHaveBeenCalled()
+  expect(screen.getByLabelText('API base URL')).toHaveValue('https://new.example/prefix/v1')
+  fireEvent.click(screen.getByLabelText('Retry saving settings'))
+  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+  expect(settings.commitSettings).toHaveBeenLastCalledWith('new-fixture-key', null, {
+    endpoint: 'https://new.example/prefix/v1',
+    modelPreferences: { 'https://new.example/prefix/v1': ['Vendor/exact'] },
+  })
 })

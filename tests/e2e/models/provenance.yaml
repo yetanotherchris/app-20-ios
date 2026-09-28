@@ -1,0 +1,62 @@
+appId: com.app20.chat
+---
+# Seed prepare-fixtures.py output in this disposable app's private Documents first.
+- launchApp
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_A}
+- hideKeyboard
+- tapOn: Enter API key
+- eraseText
+- inputText: fixture-key
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- tapOn: Exact model identifier
+- inputText: fixture/shared
+- tapOn: Add model
+- tapOn: Close model settings
+- tapOn: Close settings
+- tapOn: Open conversations
+- tapOn: Model provenance A
+- assertVisible: fixture/shared
+- assertVisible: Model provenance A preserved answer
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_B}
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- tapOn: Exact model identifier
+- inputText: fixture/shared
+- tapOn: Add model
+- tapOn: Close model settings
+- tapOn: Close settings
+- assertVisible: Choose a model
+- assertVisible: Model provenance A preserved answer
+- tapOn:
+    id: chat.composer.input
+- inputText: blocked until confirmation
+- assertVisible:
+    text: Send message
+    enabled: false
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Model provenance A
+- assertVisible: Choose a model
+- assertVisible: Model provenance A preserved answer
+- tapOn:
+    id: chat.model-picker
+- tapOn: fixture/shared
+- tapOn:
+    id: chat.composer.input
+- eraseText
+- inputText: explicitly confirmed provider B
+- tapOn: Send message
+- assertVisible: model=fixture/shared
+- assertVisible: Model provenance A preserved answer

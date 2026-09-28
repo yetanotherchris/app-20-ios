@@ -1,0 +1,26 @@
+appId: com.app20.chat
+---
+- launchApp:
+    clearState: true
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${UNSUPPORTED_PROVIDER}
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- assertVisible: Retry model catalog
+- tapOn: Exact model identifier
+- inputText: fixture/unlisted
+- tapOn: Add model
+- assertVisible: Disable model fixture/unlisted
+- tapOn: Retry model catalog
+- assertVisible: Retry model catalog
+- assertVisible: Disable model fixture/unlisted
+- tapOn: Close model settings
+- tapOn: Close settings
+- tapOn: New chat
+- tapOn:
+    id: chat.model-picker
+- assertVisible: fixture/unlisted

@@ -1,0 +1,49 @@
+appId: com.app20.chat
+---
+# Run with fresh default settings and seeded legacy conversation fixtures.
+- launchApp
+- tapOn: Open conversations
+- tapOn: Legacy auto fixture
+- assertVisible: openrouter/auto
+- assertVisible: Legacy auto fixture preserved answer
+- tapOn: Open conversations
+- tapOn: Settings
+- tapOn: API base URL
+- eraseText
+- inputText: ${PROVIDER_A}
+- hideKeyboard
+- tapOn: Enter API key
+- eraseText
+- inputText: fixture-key
+- hideKeyboard
+- assertVisible: Saved
+- tapOn: Manage models
+- tapOn: Exact model identifier
+- inputText: fixture/shared
+- tapOn: Add model
+- tapOn: Close model settings
+- tapOn: Close settings
+- assertVisible: Choose a model
+- assertVisible: Legacy auto fixture preserved answer
+- tapOn: Open conversations
+- tapOn: Legacy manual fixture
+- assertVisible: Choose a model
+- assertVisible: Legacy manual fixture preserved answer
+- tapOn:
+    id: chat.composer.input
+- inputText: awaiting explicit legacy confirmation
+- assertVisible:
+    text: Send message
+    enabled: false
+- tapOn:
+    id: chat.model-picker
+- tapOn: fixture/shared
+- tapOn: Send message
+- assertVisible: model=fixture/shared
+- assertVisible: Legacy manual fixture preserved answer
+- stopApp
+- launchApp
+- tapOn: Open conversations
+- tapOn: Legacy manual fixture
+- assertVisible: fixture/shared
+- assertVisible: Legacy manual fixture preserved answer

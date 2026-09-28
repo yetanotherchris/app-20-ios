@@ -1,7 +1,10 @@
+import { normalizeProviderEndpoint } from '../ai/providerEndpoint'
+import { withEnabledModels } from './modelPreferences'
 import type { S3Config, SettingsSnapshot } from '../secrets/secretService'
 import type { SettingsPatch } from './settingsImport'
 
-export type SettingsField = 'apiKey' | 'bucket' | 'region' | 'accessKeyId' | 'secretAccessKey' | 'endpoint'
+export type SettingsField =
+  'apiKey' | 'bucket' | 'region' | 'accessKeyId' | 'secretAccessKey' | 'endpoint' | 'providerEndpoint'
 
 export type SettingsErrors = Partial<Record<SettingsField, string>>
 
@@ -11,14 +14,18 @@ export interface ValidatedSettings {
 }
 
 export function mergeSettingsPatch(snapshot: SettingsSnapshot, patch: SettingsPatch): SettingsSnapshot {
-  return {
+  const next = {
+    ...snapshot,
     apiKey: patch.apiKey ?? snapshot.apiKey,
+    ...(patch.endpoint !== undefined ? { endpoint: normalizeProviderEndpoint(patch.endpoint) } : {}),
     s3: { ...snapshot.s3, ...patch.s3 },
   }
+  return patch.enabledModels === undefined ? next : withEnabledModels(next, patch.enabledModels)
 }
 
 function trimSettings(snapshot: SettingsSnapshot): SettingsSnapshot {
   return {
+    ...snapshot,
     apiKey: snapshot.apiKey.trim(),
     s3: {
       bucket: snapshot.s3.bucket.trim(),
@@ -42,6 +49,14 @@ export function validateSettings(snapshot: SettingsSnapshot): {
   errors: SettingsErrors
   value: ValidatedSettings | null
 } {
+  try {
+    normalizeProviderEndpoint(snapshot.endpoint)
+  } catch (error) {
+    return {
+      errors: { providerEndpoint: error instanceof Error ? error.message : 'Use an absolute HTTPS API base URL.' },
+      value: null,
+    }
+  }
   const value = trimSettings(snapshot)
   const s3Values = Object.values(value.s3)
   if (s3Values.every((entry) => entry === '')) return { errors: {}, value: { apiKey: value.apiKey, s3: null } }
