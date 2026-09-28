@@ -21,7 +21,7 @@ Independent test: normalized custom prefix persists across relaunch, invalid/fai
 - [x] T005 [US2] Validate endpoint imports and atomic provider activation in src/settings/settingsImport.ts, src/settings/settingsValidation.ts and tests/settings/.
 - [x] T006 [US2] Add API base URL, help/reset and autosave/retry in src/settings/SettingsSheet.tsx.
 - [x] T007 [US2] Capture request URL/key and prohibit redirects in src/ai/openrouter.ts and src/settings/modelCatalog.ts; test capture, stale discovery and chat/catalog redirect mode to prevent credential forwarding.
-- [x] T008 [US2] Add endpoint/atomic import acceptance in tests/e2e/models/endpoint.yaml.
+- [x] T008 [US2] Add endpoint acceptance in tests/e2e/models/endpoint.yaml and joint provider import acceptance in tests/e2e/models/atomic-import.yaml.
 
 ## Completion
 
