@@ -1,6 +1,6 @@
 # Feature Specification: Searchable Model Settings
 
-**Feature Branch**: `spec-121-124-settings-models-s3`
+**Feature Branch**: `spec-122-settings-model-catalog`
 **Created**: 2026-09-26
 **Status**: Draft
 **Input**: User description: "Add and toggle models in Settings using a searchable full list from an OpenAI-compatible /models endpoint, then show enabled models in the conversation dropdown."

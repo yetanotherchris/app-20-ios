@@ -134,3 +134,21 @@ it('retains malformed non-UTF8 S3 bytes exactly before repair', async () => {
     client.destroy()
   }
 }, 30000)
+
+it('retains credential-free model selection provenance through an HTTP S3 upload and download', async () => {
+  const remote = createS3Remote(config)
+  const { parseConversationSafe } = await import('../../src/storage/schema')
+  const content = serializeConversation({
+    id: 'selection',
+    title: 'Selection fixture',
+    model: 'vendor/exact',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    selectionProvenance: { endpoint: 'https://provider.example/v1' },
+    messages: [],
+  })
+  await remote.writeText('selection.json', content)
+  const downloaded = await remote.readText('selection.json')
+  expect(parseConversationSafe(downloaded!)?.selectionProvenance).toEqual({ endpoint: 'https://provider.example/v1' })
+  expect(parseConversationSafe(downloaded!)?.model).toBe('vendor/exact')
+})

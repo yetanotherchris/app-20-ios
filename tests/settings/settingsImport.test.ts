@@ -149,3 +149,21 @@ describe('UTF-8 settings files', () => {
     expect(parseSettingsImport('settings.toml', ' '.repeat(1024 * 1024 + 1)).ok).toBe(false)
   })
 })
+
+it('imports exact enabled identifiers and resolves endpoint omission/reset correctly', () => {
+  expect(parseSettingsImport('models.toml', 'enabledModels = []')).toEqual({ ok: true, patch: { enabledModels: [] } })
+  expect(parseSettingsImport('models.toml', 'endpoint = ""\nenabledModels = ["vendor/exact", "UPPER"]')).toEqual({
+    ok: true,
+    patch: { endpoint: 'https://openrouter.ai/api/v1', enabledModels: ['vendor/exact', 'UPPER'] },
+  })
+})
+it.each([
+  'enabledModels = ["x", "x"]',
+  'enabledModels = [""]',
+  'enabledModels = [3]',
+  'enabledModels = "x"',
+  'endpoint = "https://user:pass@host/v1"\napiKey = "new"',
+  'endpoint = "https://host/v1/models"',
+])('rejects invalid provider imports atomically: %s', (raw) => {
+  expect(parseSettingsImport('models.toml', raw).ok).toBe(false)
+})

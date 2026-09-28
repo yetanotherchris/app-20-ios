@@ -167,3 +167,18 @@ describe('parseConversationSafe', () => {
     expect(parseConversationSafe('{ not json')).toBeNull()
   })
 })
+
+it('round trips endpoint provenance without retaining credential or unrelated fields', () => {
+  const value = sampleConversation({
+    model: 'vendor/exact',
+    selectionProvenance: { endpoint: 'https://provider.example/v1', apiKey: 'must-not-transfer', extra: true },
+  })
+  const raw = serializeConversation(value)
+  expect(raw).not.toContain('must-not-transfer')
+  expect(parseConversationSafe(raw)?.selectionProvenance).toEqual({ endpoint: 'https://provider.example/v1' })
+  expect(
+    parseConversationSafe(
+      serializeConversation({ ...value, selectionProvenance: { endpoint: 'https://user:pass@provider.example/v1' } }),
+    )?.selectionProvenance,
+  ).toEqual({})
+})

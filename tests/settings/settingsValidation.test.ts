@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateSettings } from '../../src/settings/settingsValidation'
+import { validateSettings, mergeSettingsPatch } from '../../src/settings/settingsValidation'
 
 const empty = {
   apiKey: '',
@@ -39,4 +39,17 @@ describe('validateSettings', () => {
 
     expect(result).toEqual({ errors: { endpoint: 'Use an absolute HTTPS URL.' }, value: null })
   })
+})
+
+it('assigns imported lists to the document endpoint and keeps unrelated endpoint choices', () => {
+  const current = { ...empty, endpoint: 'https://a.example/v1', modelPreferences: { 'https://a.example/v1': ['old'] } }
+  const next = mergeSettingsPatch(current, { endpoint: 'https://b.example/prefix/v1/', enabledModels: ['exact'] })
+  expect(next.endpoint).toBe('https://b.example/prefix/v1')
+  expect(next.modelPreferences).toEqual({ 'https://a.example/v1': ['old'], 'https://b.example/prefix/v1': ['exact'] })
+  expect(mergeSettingsPatch(current, { enabledModels: [] }).modelPreferences?.['https://a.example/v1']).toEqual([])
+  expect(
+    mergeSettingsPatch(current, { endpoint: '', enabledModels: ['auto'] }).modelPreferences?.[
+      'https://openrouter.ai/api/v1'
+    ],
+  ).toEqual(['auto'])
 })

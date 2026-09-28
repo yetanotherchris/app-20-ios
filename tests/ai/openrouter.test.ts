@@ -43,6 +43,7 @@ describe('createOpenRouterProvider', () => {
     expect(text).toEqual(['Hello', ' there'])
     expect(captured.url).toBe(OPENROUTER_ENDPOINT)
     expect(captured.init?.method).toBe('POST')
+    expect(captured.init?.redirect).toBe('error')
     expect(captured.init?.headers['Authorization']).toBe('Bearer sk-secret')
     expect(captured.init?.headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(captured.init?.body ?? '{}')).toEqual({

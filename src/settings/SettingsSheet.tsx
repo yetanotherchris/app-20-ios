@@ -1,3 +1,5 @@
+import { DEFAULT_PROVIDER_ENDPOINT, normalizeProviderEndpoint } from '../ai/providerEndpoint'
+import { ModelCatalog } from './ModelCatalogSection'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -38,6 +40,7 @@ function fieldError(errors: SettingsErrors, field: keyof SettingsErrors): React.
 }
 
 export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSheetProps): React.JSX.Element {
+  const [saved, setSaved] = useState<SettingsSnapshot | null>(null)
   const [draft, setDraft] = useState<SettingsSnapshot>(EMPTY_SETTINGS)
   const [errors, setErrors] = useState<SettingsErrors>({})
   const [status, setStatus] = useState<SaveStatus>('idle')
@@ -61,22 +64,28 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
     if (!fromImport && !manualSavePending.current && !pendingImport.current) return true
     const result = validateSettings(value)
     setErrors(result.errors)
+    if (result.errors.providerEndpoint) {
+      setStatus('idle')
+      return false
+    }
     setStatus('saving')
     const atomic = pendingImport.current
     const operation = async (): Promise<void> => {
-      if (atomic) {
-        await service.commitSettings(
-          value.apiKey,
-          result.value
-            ? result.value.s3 === null
-              ? null
-              : { ...value.s3, endpoint: value.s3.endpoint || undefined }
-            : undefined,
-        )
-      } else {
-        await service.saveApiKey(value.apiKey.trim())
-        if (result.value) await service.saveS3Config(result.value.s3)
+      if (result.errors.providerEndpoint) throw new Error('Invalid API base URL.')
+      const provider = {
+        ...(value.endpoint !== undefined ? { endpoint: normalizeProviderEndpoint(value.endpoint) } : {}),
+        ...(value.modelPreferences !== undefined ? { modelPreferences: value.modelPreferences } : {}),
       }
+      const apiKey = atomic ? value.apiKey : value.apiKey.trim()
+      const s3 = result.value
+        ? result.value.s3 === null
+          ? null
+          : atomic
+            ? { ...value.s3, endpoint: value.s3.endpoint || undefined }
+            : result.value.s3
+        : undefined
+      if (Object.keys(provider).length) await service.commitSettings(apiKey, s3, provider)
+      else await service.commitSettings(apiKey, s3)
     }
     const previous = saving.current ?? Promise.resolve()
     // A failed write must not block a later chained write (FR-009).
@@ -84,6 +93,11 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
     saving.current = next
     try {
       await next
+      setSaved({
+        ...value,
+        endpoint: normalizeProviderEndpoint(value.endpoint),
+        apiKey: atomic ? value.apiKey : value.apiKey.trim(),
+      })
       if (latestDraft.current === value) {
         if (result.value) {
           setStatus('saved')
@@ -132,6 +146,7 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
         if (cancelled) return
         latestDraft.current = value
         setDraft(value)
+        setSaved(value)
         setSavedS3Configured(Boolean(validateSettings(value).value?.s3))
         setErrors({})
         setStatus('idle')
@@ -308,6 +323,31 @@ export function SettingsSheet({ visible, service, onClose, onSaved }: SettingsSh
           keyboardShouldPersistTaps="handled"
           ref={scrollRef}
         >
+          <Text style={styles.title}>API base URL</Text>
+          <Text>
+            The saved API key is used for this destination. /chat/completions and /models are appended. Example:
+            https://openrouter.ai/api/v1
+          </Text>
+          <TextInput
+            accessibilityLabel="API base URL"
+            placeholder={DEFAULT_PROVIDER_ENDPOINT}
+            value={draft.endpoint ?? DEFAULT_PROVIDER_ENDPOINT}
+            editable={!interactionLocked}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={(endpoint) => update({ ...draft, endpoint })}
+            onBlur={() => void save(latestDraft.current)}
+          />
+          {fieldError(errors, 'providerEndpoint')}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reset API base URL to default"
+            disabled={interactionLocked}
+            onPress={() => update({ ...draft, endpoint: DEFAULT_PROVIDER_ENDPOINT })}
+          >
+            <Text>Reset API base URL to default</Text>
+          </Pressable>
+          <ModelCatalog saved={saved} draft={draft} visible={visible} disabled={interactionLocked} onChange={update} />
           <Pressable
             accessibilityLabel="Import from TOML file"
             accessibilityRole="button"

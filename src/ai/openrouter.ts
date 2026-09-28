@@ -1,3 +1,4 @@
+import { providerFetch } from './providerEndpoint'
 import { ProviderError, classifyHttpStatus } from './errors'
 import type { ChatProvider, ChatRequest, ProviderMessage } from './provider'
 import { parseOpenRouterStream, type ByteStream } from './stream'
@@ -11,6 +12,7 @@ export interface HttpFetchInit {
   headers: Record<string, string>
   body: string
   signal: AbortSignal
+  redirect: 'error'
 }
 
 export interface HttpFetchResponse {
@@ -35,7 +37,7 @@ function requestBody(model: string, messages: readonly ProviderMessage[]): strin
 
 export function createOpenRouterProvider(options: OpenRouterOptions): ChatProvider {
   const endpoint = options.endpoint ?? OPENROUTER_ENDPOINT
-  const fetchImpl: HttpFetch = options.fetch ?? ((url, init) => fetch(url, init))
+  const fetchImpl: HttpFetch = options.fetch ?? ((url, init) => providerFetch(url, init))
 
   async function* streamChat(request: ChatRequest, signal: AbortSignal): AsyncIterable<string> {
     const apiKey = typeof options.apiKey === 'function' ? await options.apiKey() : options.apiKey
@@ -51,6 +53,7 @@ export function createOpenRouterProvider(options: OpenRouterOptions): ChatProvid
         },
         body: requestBody(request.model, request.messages),
         signal,
+        redirect: 'error',
       })
     } catch {
       if (signal.aborted) return

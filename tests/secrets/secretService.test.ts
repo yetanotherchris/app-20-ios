@@ -95,3 +95,32 @@ describe('legacy migration', () => {
     expect(records.get('s3')).toContain('legacy-secret')
   })
 })
+
+describe('provider destination and model transaction', () => {
+  it('commits endpoint, key and endpoint lists together, including explicit empty list', async () => {
+    const service = createSecretService()
+    await service.commitSettings('old-key', config, {
+      endpoint: 'https://old.example/v1',
+      modelPreferences: { 'https://old.example/v1': ['same'] },
+    })
+    const old = await service.readSettings()
+    const provider = {
+      endpoint: 'https://new.example/prefix/v1/',
+      modelPreferences: {
+        'https://old.example/v1': ['same'],
+        'https://new.example/prefix/v1': [],
+      },
+    }
+    vi.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(new Error('interrupted commit'))
+    await expect(service.commitSettings('new-key', undefined, provider)).rejects.toThrow()
+    expect(await createSecretService().readSettings()).toEqual(old)
+    await service.commitSettings('new-key', undefined, provider)
+    const restored = await createSecretService().readSettings()
+    expect(restored.apiKey).toBe('new-key')
+    expect(restored.endpoint).toBe('https://new.example/prefix/v1')
+    expect(restored.modelPreferences).toEqual(provider.modelPreferences)
+    expect(restored.s3).toEqual(old.s3)
+    await service.saveApiKey('edited')
+    expect((await service.readSettings()).modelPreferences).toEqual(provider.modelPreferences)
+  })
+})

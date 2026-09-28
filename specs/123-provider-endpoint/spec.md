@@ -1,6 +1,6 @@
 # Feature Specification: Configurable Provider Endpoint
 
-**Feature Branch**: `spec-121-124-settings-models-s3`
+**Feature Branch**: `spec-122-settings-model-catalog`
 **Created**: 2026-09-26
 **Status**: Draft
 **Input**: User description: "Add an endpoint setting to Settings, defaulting to the OpenRouter endpoint."

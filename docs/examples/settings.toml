@@ -1,5 +1,9 @@
 # Omit fields to preserve their current draft values.
 apiKey = "YOUR_PROVIDER_API_KEY"
+# Optional provider base URL; empty resolves to OpenRouter.
+endpoint = "https://openrouter.ai/api/v1"
+# Exact enabled identifiers for this endpoint; [] disables all models.
+enabledModels = ["openrouter/auto"]
 
 [s3]
 bucket = "my-conversations"
