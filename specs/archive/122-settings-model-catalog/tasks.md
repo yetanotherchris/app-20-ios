@@ -5,12 +5,12 @@
 ## Phase 1: Setup
 
 - [x] T001 Create branch and resolve specs 122 and 123 explicitly; inspect README.md, package.json and .specify/memory/constitution.md.
-- [x] T002 Produce design artifacts under specs/122-settings-model-catalog/ and specs/123-provider-endpoint/.
-- [x] T003 Obtain independent consistency and testable coverage review of specs/122-settings-model-catalog/tasks.md and related artifacts; resolve actionable gaps before code.
+- [x] T002 Produce design artifacts under specs/archive/122-settings-model-catalog/ and specs/archive/123-provider-endpoint/.
+- [x] T003 Obtain independent consistency and testable coverage review of specs/archive/122-settings-model-catalog/tasks.md and related artifacts; resolve actionable gaps before code.
 
 ## Phase 2: Foundation
 
-- [x] T004 Implement prerequisite endpoint contract and its tests under src/ai/providerEndpoint.ts and specs/123-provider-endpoint/tasks.md.
+- [x] T004 Implement prerequisite endpoint contract and its tests under src/ai/providerEndpoint.ts and specs/archive/123-provider-endpoint/tasks.md.
 - [x] T005 Extend protected atomic snapshots and migrations with endpoint-scoped preferences in src/secrets/secretService.ts; verify failed commit retains previous pair/list in tests/secrets/secretService.test.ts.
 - [x] T006 Extend TOML import/merge validation for endpoint and enabledModels in src/settings/settingsImport.ts and src/settings/settingsValidation.ts; test omitted/reset endpoint, duplicate/empty lists and incomplete S3 in tests/settings/.
 
@@ -40,8 +40,8 @@ Independent test: offline/unauthorized/malformed/empty/refresh, saved choices pr
 
 ## Phase 6: Validation, archive and PR
 
-- [ ] T016 Run lint/typecheck/unit/format checks from package.json and npm run test:e2e; record exact unavailable native tooling/scenarios in tasks.md.
-- [ ] T017 Archive complete directories to specs/archive/122-settings-model-catalog/ and specs/archive/123-provider-endpoint/, set Archived status, repair references and selected local context.
+- [x] T016 Run lint/typecheck/unit/format checks from package.json and npm run test:e2e; record exact unavailable native tooling/scenarios in tasks.md.
+- [x] T017 Archive complete directories to specs/archive/122-settings-model-catalog/ and specs/archive/123-provider-endpoint/, set Archived status, repair references and selected local context.
 - [ ] T018 Commit and publish authorized implementation PR; use root AGENTS.md description format and verify stored GitHub body.
 - [ ] T019 Obtain five independent read-only PR reviews: correctness/regressions, requirements/acceptance, security/privacy, code quality and tests; post full attributed reports directly to GitHub PR.
 - [ ] T020 Resolve every finding, add meaningful regression coverage, rerun affected checks, obtain relevant reviewer verification and reply with fix commits or rationale to every GitHub report.
@@ -59,4 +59,4 @@ Deliver US1 as the first independently testable increment, then selection/send a
 
 Native acceptance was attempted: `npm run test:e2e` exits 127 with `maestro: Permission denied`. No Maestro executable resolves in this environment, and `xcrun` is absent; no installed iOS build can be exercised. All catalog/picker, relaunch, SecureStore/file-picker, lifecycle and native redirect scenarios remain unverified. Maestro flows are authored for catalog, endpoint, selected send and recovery.
 
-Lint and typecheck pass. Changed-file formatting passes. Repository-wide `npm run format:check` fails on pre-existing formatting; a clean HEAD archive also fails (185 files). The current failures are a subset of that baseline except the generated local `.specify/feature.json`, which will be formatted when updating archived context. Unit/component and HTTP S3 final validation is in progress.
+Lint and typecheck pass. Changed-file formatting passes. Repository-wide `npm run format:check` fails on pre-existing formatting; a clean HEAD archive also fails (185 files). The current failures are a subset of that baseline except the generated local `.specify/feature.json`, which will be formatted when updating archived context. Final unit/component and HTTP S3 validation passes: 28 files, 268 tests. The S3 emulator exercises the tested HTTP contract and does not establish production backend compatibility.
